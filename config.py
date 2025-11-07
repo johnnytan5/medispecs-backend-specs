@@ -11,9 +11,6 @@ USER_ID: Final[str] = "u_123"
 # Lambda API Configuration - loaded from .env
 LAMBDA_API_URL: Final[str] = os.getenv("LAMBDA_API_URL")
 
-# Database Configuration
-DATABASE_URL: Final[str] = "sqlite+aiosqlite:///./reminders.db"
-
 # Sync Configuration
 AUTO_SYNC_ON_STARTUP: Final[bool] = True
 CLEAR_ON_SYNC: Final[bool] = True  # Clear all local reminders before syncing

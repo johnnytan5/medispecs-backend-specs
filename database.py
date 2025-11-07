@@ -2,9 +2,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+import os
+from pathlib import Path
+
+# Ensure data directory exists
+data_dir = Path("/app/data")
+data_dir.mkdir(parents=True, exist_ok=True)
 
 # SQLite database URL
-SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./reminders.db"
+SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:////app/data/reminders.db"
 
 # Create async engine
 engine = create_async_engine(

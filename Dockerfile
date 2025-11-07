@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6-dev \
     liblcms2-dev \
     libopenjp2-7 \
-    libtiff5 \
+    libtiff6 \
     i2c-tools \
     && rm -rf /var/lib/apt/lists/*
 
@@ -31,6 +31,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
+
+# Create data directory for SQLite database
+RUN mkdir -p /app/data && chmod 777 /app/data
 
 # Expose port
 EXPOSE 8000

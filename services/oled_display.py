@@ -80,8 +80,11 @@ class OLEDDisplayService:
     
     def show_message(self, message, font=None, should_blink=True, display_time=10):
         """Display a centered message on the OLED screen with optional blinking."""
+        # Always print to console for debugging
+        print(f"📺 OLED Display: {message}")
+        
         if not self.is_available:
-            print(f"OLED not available. Would display: {message}")
+            print(f"⚠️  OLED hardware not available (showing in console only)")
             return
         
         width = self.device.width
@@ -113,8 +116,11 @@ class OLEDDisplayService:
     def display_wrapped_message(self, message, max_chars_per_line=16, font=None, 
                                should_blink=True, display_time=10):
         """Wrap the message into multiple centered lines and display it."""
+        # Always print to console for debugging
+        print(f"📺 OLED Display (wrapped): {message}")
+        
         if not self.is_available:
-            print(f"OLED not available. Would display: {message}")
+            print(f"⚠️  OLED hardware not available (showing in console only)")
             return
         
         width = self.device.width
@@ -149,8 +155,11 @@ class OLEDDisplayService:
     
     def display_scrolling_message(self, message, pause=1.0, step=1, delay=0.03, font=None):
         """Scroll the message upwards across the display."""
+        # Always print to console for debugging
+        print(f"📺 OLED Display (scrolling): {message}")
+        
         if not self.is_available:
-            print(f"OLED not available. Would display: {message}")
+            print(f"⚠️  OLED hardware not available (showing in console only)")
             return
         
         width = self.device.width
@@ -223,8 +232,11 @@ class OLEDDisplayService:
             should_blink: Whether to blink the message (default: True)
             display_time: How long to show the message in seconds (default: 10)
         """
+        # Always print to console for debugging
+        print(f"🔔 OLED Reminder: {message} (blink={should_blink}, duration={display_time}s)")
+        
         if not self.is_available:
-            print(f"🔔 OLED not available. Reminder: {message}")
+            print(f"⚠️  OLED hardware not available (showing in console only)")
             return
         
         if message is None:
@@ -263,6 +275,8 @@ class OLEDDisplayService:
     
     def clear_display(self):
         """Clear the OLED display"""
+        print(f"🧹 OLED Display: Cleared")
+        
         if not self.is_available:
             return
         
