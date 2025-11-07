@@ -23,7 +23,15 @@ async def show_on_display(request: DisplayRequest):
         from services.oled_display import get_oled_service
         oled = get_oled_service()
         
+        print(f"\n{'='*60}")
+        print(f"📺 DISPLAY REQUEST: {request.message}")
+        print(f"   Font Size: {request.font_size}")
+        print(f"   Blink: {request.should_blink}")
+        print(f"   Duration: {request.display_time}s")
+        print(f"{'='*60}\n")
+        
         if not oled.is_available:
+            print("⚠️  OLED hardware not available - message shown above")
             return {
                 "status": "warning",
                 "message": "OLED display not available",
@@ -102,7 +110,14 @@ async def print_time_now():
         # Combine for display
         display_message = f"{time_string}\n{date_string}"
         
+        print(f"\n{'='*60}")
+        print(f"📺 DISPLAY REQUEST: Show current time")
+        print(f"   Time: {time_string}")
+        print(f"   Date: {date_string}")
+        print(f"{'='*60}\n")
+        
         if not oled.is_available:
+            print("⚠️  OLED hardware not available - message shown above")
             return {
                 "status": "warning",
                 "message": "OLED display not available",

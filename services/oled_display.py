@@ -24,12 +24,18 @@ class OLEDDisplayService:
         
         if device is None:
             try:
-                from demo_opts import get_device
+                from oled_device import get_device
                 self.device = get_device()
                 self._initialized = True
-                print("✓ OLED display initialized")
+                print("✓ OLED display initialized successfully")
+            except ImportError:
+                print(f"⚠️  OLED hardware library not available - running in console-only mode")
+                print(f"   (On Raspberry Pi, install: pip install luma.oled)")
+                print(f"   (OLED messages will be printed to terminal for debugging)")
+                self._initialized = False
             except Exception as e:
-                print(f"⚠️  OLED display not available: {e}")
+                print(f"⚠️  OLED hardware initialization failed: {str(e)}")
+                print(f"   (OLED messages will be printed to terminal for debugging)")
                 self._initialized = False
         else:
             self._initialized = True
