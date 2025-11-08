@@ -79,21 +79,34 @@ class FaceDetectionService:
                     print(f"📷 Attempting to open Pi Camera using picamera2...")
                     self.picam = Picamera2()
                     
+                    # List available cameras
+                    print(f"   Available cameras: {self.picam.global_camera_info()}")
+                    
                     # Configure camera for 640x480 (matches our resize target)
                     config = self.picam.create_preview_configuration(
                         main={"size": (640, 480), "format": "RGB888"}
                     )
                     self.picam.configure(config)
+                    
+                    print(f"   Starting camera...")
                     self.picam.start()
                     
                     # Give camera time to initialize
+                    print(f"   Waiting for camera to warm up...")
                     time.sleep(2)
+                    
+                    # Test capture
+                    test_frame = self.picam.capture_array()
+                    print(f"   Test capture successful: {test_frame.shape}")
                     
                     self.use_picamera = True
                     print(f"✅ Pi Camera opened successfully (picamera2)")
                     
                 except Exception as e:
                     print(f"⚠️  Failed to open picamera2: {e}")
+                    print(f"   Error type: {type(e).__name__}")
+                    import traceback
+                    traceback.print_exc()
                     print(f"   Falling back to OpenCV...")
                     self.use_picamera = False
             

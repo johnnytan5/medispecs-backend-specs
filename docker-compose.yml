@@ -23,7 +23,13 @@ services:
       - /dev/i2c-1:/dev/i2c-1          # OLED display via I2C
       - /dev/gpiomem:/dev/gpiomem      # GPIO access
       - /dev/video0:/dev/video0        # Camera (USB or Pi Camera via v4l2)
+      - /dev/vchiq:/dev/vchiq          # VideoCore interface (for Pi Camera)
+      - /dev/video10:/dev/video10      # Pi Camera ISP
+      - /dev/video11:/dev/video11      # Pi Camera ISP
+      - /dev/video12:/dev/video12      # Pi Camera ISP
     privileged: true                    # Required for hardware access
+    group_add:
+      - video                           # Add video group for camera access
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
     networks:
