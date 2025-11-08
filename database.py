@@ -17,11 +17,24 @@ if is_docker:
     # Running in Docker
     data_dir = Path("/app/data")
 else:
-    # Running locally - use current directory
-    data_dir = Path(__file__).parent / "data"
+    # Running locally - use project root directory
+    # Get the directory where this file is located (project root)
+    project_root = Path(__file__).resolve().parent
+    data_dir = project_root / "data"
 
-# Ensure data directory exists
-data_dir.mkdir(parents=True, exist_ok=True)
+# Ensure data directory exists with proper permissions
+try:
+    data_dir.mkdir(parents=True, exist_ok=True)
+    # Verify we can write to it
+    test_file = data_dir / ".test_write"
+    test_file.touch()
+    test_file.unlink()
+except Exception as e:
+    print(f"❌ ERROR: Cannot create/write to data directory: {data_dir}")
+    print(f"   Error: {e}")
+    print(f"   Current user: {os.getenv('USER', 'unknown')}")
+    print(f"   Current directory: {os.getcwd()}")
+    raise
 
 # SQLite database URL (use absolute path)
 db_path = data_dir.absolute() / "reminders.db"
@@ -30,6 +43,7 @@ SQLALCHEMY_DATABASE_URL = f"sqlite+aiosqlite:///{db_path}"
 # Debug: Print database location
 print(f"📁 Database location: {db_path}")
 print(f"   Running in Docker: {is_docker}")
+print(f"   Data directory: {data_dir.absolute()}")
 
 # Create async engine
 engine = create_async_engine(

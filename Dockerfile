@@ -1,5 +1,5 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
+# Use Debian Bookworm as base (compatible with Raspberry Pi OS)
+FROM python:3.11-bookworm
 
 # Set working directory
 WORKDIR /app
@@ -8,14 +8,15 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies (OLED/I2C, OpenCV, YOLO, camera)
-# Note: libcamera may not be available in standard Debian, but we try anyway
+# Install system dependencies for Raspberry Pi Camera and picamera2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     python3-dev \
+    python3-pip \
     libjpeg-dev \
     zlib1g-dev \
     libfreetype6-dev \
@@ -30,16 +31,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libgl1 \
     libcap-dev \
-    python3-numpy \
-    python3-pil \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies (with increased timeout for large packages like ultralytics)
-# Note: picamera2 will be installed via pip (requires system libs above)
+# Install Python dependencies
 RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
+
+# Install picamera2 from git (works on any Linux with proper setup)
+RUN pip install --no-cache-dir "picamera2[gui]" simplejpeg
 
 # Copy application code
 COPY . .

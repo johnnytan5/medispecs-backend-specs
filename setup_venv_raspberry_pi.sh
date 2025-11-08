@@ -80,6 +80,23 @@ pip install -r requirements.txt
 echo "✅ Python dependencies installed"
 echo ""
 
+# Create data directory for SQLite database
+echo "7. Creating data directory..."
+mkdir -p data
+chmod 755 data
+echo "✅ Data directory created at: $(pwd)/data"
+echo ""
+
+# Test database directory write access
+echo "8. Testing database directory..."
+touch data/.test_write && rm data/.test_write && {
+    echo "✅ Database directory is writable"
+} || {
+    echo "❌ Cannot write to data directory"
+    exit 1
+}
+echo ""
+
 echo "=================================================="
 echo "✅ Setup complete!"
 echo "=================================================="
