@@ -18,7 +18,8 @@ from config import (
     FACE_CONFIRMATION_COUNT,
     FACE_COOLDOWN_SECONDS,
     YOLO_MODEL,
-    CAMERA_INDEX
+    CAMERA_INDEX,
+    YOLO_CONFIDENCE_THRESHOLD
 )
 
 
@@ -80,6 +81,7 @@ class FaceDetectionService:
         
         print(f"▶️  Face detection started")
         print(f"   Detection rate: {FACE_DETECTION_FPS}Hz")
+        print(f"   Confidence threshold: {YOLO_CONFIDENCE_THRESHOLD:.2f}")
         print(f"   Confirmation: {FACE_CONFIRMATION_COUNT} consecutive detections")
         print(f"   Cooldown: {FACE_COOLDOWN_SECONDS} seconds")
     
@@ -138,27 +140,52 @@ class FaceDetectionService:
         results = self.model(frame_resized, stream=True, verbose=False)
         
         person_detected = False
-        faces_to_process = []
+        valid_detections = []
         
+        # Collect all valid detections (above confidence threshold)
         for result in results:
             for box in result.boxes:
                 cls = int(box.cls[0])
                 name = self.model.names[cls]
+                confidence = float(box.conf[0])
                 
-                if name == "person":
-                    person_detected = True
+                # Only process "person" class with sufficient confidence
+                if name == "person" and confidence >= YOLO_CONFIDENCE_THRESHOLD:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    box_area = (x2 - x1) * (y2 - y1)
                     
-                    # Extract face crop (upper half of person box)
-                    h = y2 - y1
-                    face_crop = frame_resized[y1:y1 + h//2, x1:x2]
-                    
-                    faces_to_process.append(face_crop)
+                    valid_detections.append({
+                        'confidence': confidence,
+                        'box': (x1, y1, x2, y2),
+                        'area': box_area
+                    })
+        
+        # If we have valid detections, use only the most confident one
+        faces_to_process = []
+        if valid_detections:
+            person_detected = True
+            
+            # Sort by confidence (highest first)
+            valid_detections.sort(key=lambda d: d['confidence'], reverse=True)
+            
+            # Take only the most confident detection
+            best_detection = valid_detections[0]
+            x1, y1, x2, y2 = best_detection['box']
+            
+            # Extract face crop (upper half of person box)
+            h = y2 - y1
+            face_crop = frame_resized[y1:y1 + h//2, x1:x2]
+            
+            faces_to_process.append(face_crop)
+            
+            # Log the detection
+            print(f"👤 Person detected (confidence: {best_detection['confidence']:.2f}, " +
+                  f"area: {best_detection['area']} px²)")
         
         # Update detection counter
         if person_detected:
             self.consecutive_detections += 1
-            print(f"👤 Person detected ({self.consecutive_detections}/{FACE_CONFIRMATION_COUNT})")
+            print(f"   Counter: {self.consecutive_detections}/{FACE_CONFIRMATION_COUNT}")
         else:
             if self.consecutive_detections > 0:
                 print(f"   Detection reset (no person found)")

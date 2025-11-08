@@ -28,10 +28,11 @@ OLED_BLINK_ON_REMINDER: Final[bool] = True  # Blink when showing reminders
 OLED_DISPLAY_TIME: Final[int] = 10  # How long to show reminder (seconds)
 
 # Face Detection Configuration
-FACE_DETECTION_ENABLED: Final[bool] = False  # Set to True to enable face detection
+FACE_DETECTION_ENABLED: Final[bool] = True  # Set to True to enable face detection
 FACE_DETECTION_FPS: Final[int] = 2  # Detection frequency (2Hz = every 0.5 seconds)
 FACE_CONFIRMATION_COUNT: Final[int] = 4  # Consecutive detections needed (4 * 0.5s = 2 seconds)
 FACE_COOLDOWN_SECONDS: Final[int] = 10  # Wait time before detecting same area again
 YOLO_MODEL: Final[str] = "yolov8n.pt"  # YOLO model (nano for speed)
 CAMERA_INDEX: Final[int] = 0  # Camera device index (0 for default USB/Pi camera)
+YOLO_CONFIDENCE_THRESHOLD: Final[float] = 0.65  # Minimum confidence (0.0-1.0) to consider a detection valid
 
