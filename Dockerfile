@@ -29,9 +29,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libcap-dev \
     libcamera-dev \
-    libcamera0 \
+    libcamera0.4 \
     python3-libcamera \
-    python3-kms++ \
+    python3-picamera2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
