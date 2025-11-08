@@ -188,12 +188,20 @@ class STTService:
                             text = result.get('text', '').lower().strip()
                             
                             if text:
-                                print(f"🎤 Heard: '{text}'")
+                                # Log all transcribed text with timestamp
+                                import time
+                                timestamp = time.strftime("%H:%M:%S")
+                                print(f"🎤 [{timestamp}] [TRANSCRIBED] '{text}'")
                                 
                                 # Check for wake word
                                 if not self.wake_word_detected and self.wake_word in text:
-                                    print(f"\n🔔 WAKE WORD DETECTED!")
+                                    print(f"\n" + "="*60)
+                                    print(f"🔔 WAKE WORD DETECTED: '{self.wake_word}'")
+                                    print(f"="*60)
                                     self.wake_word_detected = True
+                                    
+                                    # Respond with TTS greeting
+                                    await self._respond_to_wake_word()
                                     
                                     # Callback notification
                                     if self.on_wake_word_callback:
@@ -203,11 +211,12 @@ class STTService:
                                             pass
                                     
                                     # Record command
-                                    await self._record_command()
+                                    command = await self._record_command()
                                     
                                     # Reset for next wake word
                                     self.wake_word_detected = False
-                                    print(f"🎧 Listening for '{self.wake_word}'...")
+                                    print(f"\n🎧 Listening for '{self.wake_word}'...")
+                                    print("="*60 + "\n")
                         
                         # Allow other tasks to run
                         await asyncio.sleep(0.01)
@@ -229,6 +238,23 @@ class STTService:
         finally:
             self.is_listening = False
     
+    async def _respond_to_wake_word(self):
+        """Respond to wake word with TTS greeting"""
+        try:
+            from services.tts_service import get_tts_service
+            from config import TTS_ENABLED
+            
+            if TTS_ENABLED:
+                tts = get_tts_service()
+                if tts.is_available:
+                    greeting = "Hey, I am Ruby. How can I help you?"
+                    print(f"🔊 Ruby: '{greeting}'")
+                    
+                    # Speak greeting (fire-and-forget)
+                    asyncio.create_task(tts.speak_async(greeting))
+        except Exception as e:
+            print(f"⚠️  Could not speak greeting: {e}")
+    
     async def _record_command(self):
         """Record and transcribe command after wake word detected"""
         print(f"🎙️  Recording command (timeout: {self.command_timeout}s)...")
@@ -249,14 +275,23 @@ class STTService:
         start_time = time.time()
         command_parts = []
         
+        print("   (Speak now...)")
+        
         while time.time() - start_time < self.command_timeout:
             try:
                 data = self.audio_queue.get(timeout=0.5)
+                
+                # Get partial results for real-time feedback
+                partial_result = json.loads(self.recognizer.PartialResult())
+                partial_text = partial_result.get('partial', '')
+                if partial_text:
+                    print(f"   💬 Hearing: '{partial_text}'", end='\r')
                 
                 if self.recognizer.AcceptWaveform(data):
                     result = json.loads(self.recognizer.Result())
                     text = result.get('text', '').strip()
                     if text:
+                        print(f"   ✓ Captured: '{text}'")
                         command_parts.append(text)
                 
                 await asyncio.sleep(0.01)
@@ -273,8 +308,13 @@ class STTService:
         # Combine all parts
         full_command = ' '.join(command_parts).strip()
         
+        print("\n" + "-"*60)
         if full_command:
-            print(f"✅ Command transcribed: '{full_command}'")
+            print(f"✅ [COMMAND] '{full_command}'")
+            print("-"*60)
+            
+            # Log to console for debugging
+            print(f"📝 Logged command: {full_command}")
             
             # Callback with command
             if self.on_command_callback:
@@ -283,7 +323,8 @@ class STTService:
                 except Exception as e:
                     print(f"❌ Error in command callback: {e}")
         else:
-            print("⚠️  No command detected (silence or unclear audio)")
+            print("⚠️  [NO COMMAND] Silence or unclear audio")
+            print("-"*60)
         
         return full_command
     
@@ -333,7 +374,13 @@ class STTService:
             result = json.loads(test_recognizer.FinalResult())
             text = result.get('text', '').strip()
             
-            print(f"✅ Transcribed: '{text}'")
+            print(f"\n{'='*60}")
+            print(f"✅ [TEST TRANSCRIPTION] '{text}'")
+            print(f"{'='*60}\n")
+            
+            # Log for debugging
+            print(f"📝 Test result: {text}")
+            
             return text
             
         except Exception as e:

@@ -54,7 +54,7 @@ TTS_ELEVENLABS_VOICE_ID: Final[str] = os.getenv("ELEVENLABS_VOICE_ID", "")  # Cu
 
 # Speech-to-Text Configuration (Vosk)
 STT_ENABLED: Final[bool] = True  # Set to True to enable voice commands
-STT_MODEL_PATH: Final[str] = os.getenv("STT_MODEL_PATH", "vosk-model-en-us-0.22")  # Path to Vosk model
+STT_MODEL_PATH: Final[str] = os.getenv("STT_MODEL_PATH", "vosk-model-en-us-0.22")  # Path to Vosk model (renamed from 0.15)
 STT_WAKE_WORD: Final[str] = "hey ruby"  # Wake word to activate voice commands
 STT_COMMAND_TIMEOUT: Final[int] = 5  # Seconds to record command after wake word
 STT_SAMPLE_RATE: Final[int] = 16000  # Audio sample rate (16kHz standard for speech)

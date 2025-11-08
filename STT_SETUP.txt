@@ -32,13 +32,26 @@ pip install -r requirements.txt
 Step 2: Download Vosk Model
 ----------------------------
 1. Go to: https://alphacephei.com/vosk/models
-2. Download "vosk-model-small-en-us-0.22" (50MB) or "vosk-model-en-us-0.22" (1.8GB)
+2. Choose a model based on your needs (see options below)
 3. Extract the model to your project directory
 
-Example:
-wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.22.zip
-unzip vosk-model-small-en-us-0.22.zip
-mv vosk-model-small-en-us-0.22 vosk-model-en-us-0.22
+Option A: Small Model (40MB) - RECOMMENDED for Raspberry Pi
+------------------------------------------------------------
+wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip
+mv vosk-model-small-en-us-0.15 vosk-model-en-us-0.22
+
+Option B: Full Model (1.8GB) - Best Accuracy
+---------------------------------------------
+wget https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip
+unzip vosk-model-en-us-0.22.zip
+# Already named correctly, no need to rename
+
+Option C: Lightweight Model (77MB) - Fast & Accurate
+----------------------------------------------------
+wget https://alphacephei.com/vosk/models/vosk-model-en-us-0.42-gigaspeech.zip
+unzip vosk-model-en-us-0.42-gigaspeech.zip
+mv vosk-model-en-us-0.42-gigaspeech vosk-model-en-us-0.22
 
 Your directory should look like:
 medispecs-backend-specs/
@@ -220,6 +233,7 @@ Test 4: Wake Word Detection
 
 ❌ "STT service not initialized"
   → Download Vosk model and place in correct directory
+  → Use working model URL (vosk-model-small-en-us-0.15.zip, NOT 0.22)
   → Check STT_MODEL_PATH in config.py
   → Verify model directory contains am/, graph/, etc.
 
@@ -244,9 +258,12 @@ Test 4: Wake Word Detection
   → Speak immediately after wake word confirmation
 
 ❌ Poor transcription accuracy
-  → Download larger Vosk model (vosk-model-en-us-0.22, 1.8GB)
+  → Download larger Vosk model:
+     • vosk-model-en-us-0.22.zip (1.8GB) - Best accuracy
+     • vosk-model-en-us-0.42-gigaspeech.zip (77MB) - Good balance
   → Speak more clearly and at moderate pace
   → Reduce background noise
+  → Avoid 0.22 "small" model (has bugs, repeats "the")
   → Consider upgrading to online STT (Google Speech API, Whisper)
 
 
