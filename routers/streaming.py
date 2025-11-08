@@ -55,12 +55,11 @@ async def generate_frames():
                     await asyncio.sleep(0.1)
                     continue
             
-            # Convert RGB to BGR for JPEG encoding (OpenCV expects BGR)
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            
-            # Encode frame as JPEG with quality 80 (balance between quality and bandwidth)
+            # Frame is in RGB format from face detection service
+            # Encode directly as JPEG - no conversion needed
+            # The JPEG will preserve the RGB channel order for browser display
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-            _, buffer = cv2.imencode('.jpg', frame_bgr, encode_param)
+            _, buffer = cv2.imencode('.jpg', frame, encode_param)
             frame_bytes = buffer.tobytes()
             
             # Yield frame in MJPEG format
