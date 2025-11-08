@@ -58,7 +58,8 @@ async def generate_frames():
             # Frame is in RGB format from face detection service
             # Encode directly as JPEG - no conversion needed
             # The JPEG will preserve the RGB channel order for browser display
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            # Lower quality (70%) to reduce bandwidth and lag
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
             _, buffer = cv2.imencode('.jpg', frame, encode_param)
             frame_bytes = buffer.tobytes()
             
@@ -67,11 +68,12 @@ async def generate_frames():
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
             
             frame_count += 1
-            if frame_count % 100 == 0:
+            if frame_count % 20 == 0:
                 print(f"📹 Streamed {frame_count} frames...")
             
-            # Control frame rate: 15 FPS (smooth enough, bandwidth-efficient)
-            await asyncio.sleep(1/15)
+            # Match streaming rate to face detection capture rate (2 Hz / 2 FPS)
+            # This prevents sending duplicate frames and reduces lag
+            await asyncio.sleep(0.5)  # 2 FPS = 500ms between frames
             
     except GeneratorExit:
         print(f"📹 Stream closed by client (streamed {frame_count} frames)")
