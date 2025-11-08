@@ -15,6 +15,11 @@ Pillow>=10.2.0
 luma.oled>=3.12.0
 opencv-python-headless>=4.8.1.78
 ultralytics>=8.0.227
-pyttsx3==2.90  # Text-to-Speech for voice reminders and greetings
+
+# Text-to-Speech (Hybrid: gTTS primary, pyttsx3 fallback)
+gTTS==2.5.1  # Google Text-to-Speech (high quality, requires internet)
+pygame==2.5.2  # Audio playback for gTTS
+pyttsx3==2.90  # Offline TTS fallback (basic quality)
+
 # picamera2 - Not in requirements, installed separately for Docker/Pi
 # Note: On Raspberry Pi, also install: sudo apt-get install espeak espeak-ng
