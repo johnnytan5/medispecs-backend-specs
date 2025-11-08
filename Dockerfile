@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies (OLED/I2C, OpenCV, YOLO, picamera2)
+# Install system dependencies (OLED/I2C, OpenCV, YOLO, picamera2, libcamera)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libgl1 \
     libcap-dev \
+    libcamera-dev \
+    libcamera0 \
+    python3-libcamera \
+    python3-kms++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
