@@ -15,7 +15,11 @@ from config import (
     TTS_ENABLED,
     STT_ENABLED,
     STT_MODEL_PATH,
-    STT_DEVICE_INDEX
+    STT_DEVICE_INDEX,
+    LLM_ENABLED,
+    LLM_API_KEY,
+    LLM_MODEL,
+    LLM_SYSTEM_PROMPT
 )
 import asyncio
 
@@ -80,6 +84,21 @@ async def lifespan(app: FastAPI):
             print(f"⚠️  Text-to-Speech initialization failed (voice output disabled)")
     else:
         print("⏸️  Text-to-Speech disabled (set TTS_ENABLED=True to enable)")
+    
+    # Initialize LLM service (if enabled)
+    llm_service = None
+    if LLM_ENABLED:
+        from services.llm_service import get_llm_service
+        llm_service = get_llm_service()
+        
+        if llm_service.initialize(LLM_API_KEY, LLM_MODEL, LLM_SYSTEM_PROMPT):
+            print(f"🤖 LLM enabled - Voice commands will be processed by {LLM_MODEL}")
+        else:
+            print(f"⚠️  LLM initialization failed (voice commands won't be processed)")
+            print(f"   Add OPENAI_API_KEY to .env file")
+            llm_service = None
+    else:
+        print("⏸️  LLM disabled (set LLM_ENABLED=True to enable)")
     
     # Initialize Speech-to-Text service (if enabled)
     stt_service = None
@@ -160,7 +179,8 @@ async def root():
             "OLED Display Control",
             "Live Video Streaming (MJPEG)",
             "Text-to-Speech (Voice Reminders & Greetings)",
-            "Speech-to-Text (Voice Commands with Wake Word)"
+            "Speech-to-Text (Voice Commands with Wake Word)",
+            "AI Voice Assistant (OpenAI GPT-3.5-Turbo)"
         ]
     }
 

@@ -332,7 +332,24 @@ class STTService:
             # Log to console for debugging
             print(f"📝 Logged command: {full_command}")
             
-            # Callback with command
+            # Process with LLM and speak response
+            try:
+                from services.llm_service import get_llm_service
+                from config import LLM_ENABLED
+                
+                if LLM_ENABLED:
+                    llm = get_llm_service()
+                    if llm.is_available:
+                        # Send to LLM and speak response
+                        await llm.process_and_speak(full_command)
+                    else:
+                        print("⚠️  LLM not available, command logged only")
+                else:
+                    print("⚠️  LLM disabled, command logged only")
+            except Exception as e:
+                print(f"❌ Error processing with LLM: {e}")
+            
+            # Callback with command (for additional custom handling)
             if self.on_command_callback:
                 try:
                     await self.on_command_callback(full_command)

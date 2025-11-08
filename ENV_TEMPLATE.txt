@@ -1,0 +1,56 @@
+# MediSpecs Backend Environment Variables
+# Create a file named ".env" in your project root with these variables
+
+# ============================================================================
+# OpenAI API Configuration (REQUIRED for voice assistant)
+# ============================================================================
+# Get your API key from: https://platform.openai.com/api-keys
+OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# ============================================================================
+# AWS Configuration (Face Recognition)
+# ============================================================================
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=us-east-1
+REKOGNITION_COLLECTION_ID=medispecs-faces
+
+# ============================================================================
+# Lambda API Configuration (Reminder Sync)
+# ============================================================================
+LAMBDA_API_URL=https://your-lambda-api-url.com
+
+# ============================================================================
+# Optional: Speech-to-Text Model Path Override
+# ============================================================================
+# STT_MODEL_PATH=vosk-model-en-us-0.22
+
+# ============================================================================
+# Optional: ElevenLabs Configuration (Future)
+# ============================================================================
+# ELEVENLABS_API_KEY=your-elevenlabs-api-key
+# ELEVENLABS_VOICE_ID=your-custom-voice-id
+
+
+# ============================================================================
+# HOW TO SET UP .env FILE
+# ============================================================================
+# 
+# Step 1: Create .env file in your project root
+# ----------------------------------------
+# cd /path/to/medispecs-backend-specs
+# nano .env
+#
+# Step 2: Copy and paste the variables above
+# Step 3: Replace "your-xxx-here" with your actual values
+# Step 4: Save and exit (Ctrl+O, Enter, Ctrl+X in nano)
+#
+# Your .env file should look like:
+# ----------------------------------------
+# OPENAI_API_KEY=sk-proj-abc123xyz...
+# AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+# AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+# ...
+#
+# ============================================================================
+

@@ -60,8 +60,14 @@ STT_COMMAND_TIMEOUT: Final[int] = 5  # Seconds to record command after wake word
 STT_SAMPLE_RATE: Final[int] = 16000  # Audio sample rate (16kHz standard for speech)
 STT_DEVICE_INDEX: Optional[int] = None  # Audio device index (None = default, or specific USB mic index)
 
-# Future: OpenAI LLM integration for processing voice commands
-STT_OPENAI_ENABLED: Final[bool] = False  # Enable OpenAI LLM for command processing
-STT_OPENAI_API_KEY: Final[str] = os.getenv("OPENAI_API_KEY", "")  # OpenAI API key
-STT_OPENAI_MODEL: Final[str] = "gpt-4"  # Model to use for command processing
+# LLM Configuration (OpenAI GPT for voice command processing)
+LLM_ENABLED: Final[bool] = True  # Enable LLM for processing voice commands
+LLM_API_KEY: Final[str] = os.getenv("OPENAI_API_KEY", "")  # OpenAI API key from .env
+LLM_MODEL: Final[str] = "gpt-3.5-turbo"  # Model: gpt-3.5-turbo (fast, cheap) or gpt-4 (best quality)
+LLM_SYSTEM_PROMPT: Final[str] = (
+    "You are Ruby, a helpful voice assistant for senior citizens. "
+    "Be friendly, clear, and concise, super concise, and avoid using hard jargons and vocabularies, use easy words. "
+    "You can only provide information and clarification. You CANNOT execute actions, create reminders, or control devices."
+)
+LLM_FALLBACK_MESSAGE: Final[str] = "I am not connected to internet right now"
 
