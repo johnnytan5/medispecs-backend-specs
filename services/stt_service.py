@@ -41,8 +41,10 @@ class STTService:
         self.device_index = None
         
         # Wake word settings
-        self.wake_word = "hey ruby"
+        self.wake_word = "hey ruby"  # Text-only conversation
+        self.vision_wake_word = "watch ruby"  # Vision-based conversation
         self.wake_word_detected = False
+        self.vision_wake_word_detected = False
         self.command_timeout = 5  # seconds to record command
         
         # Callbacks for integration
@@ -190,7 +192,7 @@ class STTService:
                 channels=1,
                 callback=self._audio_callback
             ):
-                print(f"🎧 Listening for '{self.wake_word}'...")
+                print(f"🎧 Listening for '{self.wake_word}' or '{self.vision_wake_word}'...")
                 self.is_listening = True
                 
                 while self.is_running:
@@ -209,8 +211,30 @@ class STTService:
                                 timestamp = time.strftime("%H:%M:%S")
                                 print(f"🎤 [{timestamp}] [TRANSCRIBED] '{text}'")
                                 
-                                # Check for wake word
-                                if not self.wake_word_detected and self.wake_word in text:
+                                # Check for vision wake word first (more specific)
+                                if not self.vision_wake_word_detected and not self.wake_word_detected and self.vision_wake_word in text:
+                                    print(f"\n" + "="*60)
+                                    print(f"👁️  VISION WAKE WORD DETECTED: '{self.vision_wake_word}'")
+                                    print(f"="*60)
+                                    self.vision_wake_word_detected = True
+                                    
+                                    # Respond with TTS greeting for vision
+                                    await self._respond_to_vision_wake_word()
+                                    
+                                    # Record command
+                                    command = await self._record_command()
+                                    
+                                    # Process vision command
+                                    if command:
+                                        await self._handle_vision_command(command)
+                                    
+                                    # Reset for next wake word
+                                    self.vision_wake_word_detected = False
+                                    print(f"\n🎧 Listening for '{self.wake_word}' or '{self.vision_wake_word}'...")
+                                    print("="*60 + "\n")
+                                
+                                # Check for text wake word
+                                elif not self.wake_word_detected and not self.vision_wake_word_detected and self.wake_word in text:
                                     print(f"\n" + "="*60)
                                     print(f"🔔 WAKE WORD DETECTED: '{self.wake_word}'")
                                     print(f"="*60)
@@ -231,7 +255,7 @@ class STTService:
                                     
                                     # Reset for next wake word
                                     self.wake_word_detected = False
-                                    print(f"\n🎧 Listening for '{self.wake_word}'...")
+                                    print(f"\n🎧 Listening for '{self.wake_word}' or '{self.vision_wake_word}'...")
                                     print("="*60 + "\n")
                         
                         # Allow other tasks to run
@@ -270,6 +294,88 @@ class STTService:
                     asyncio.create_task(tts.speak_async(greeting))
         except Exception as e:
             print(f"⚠️  Could not speak greeting: {e}")
+    
+    async def _respond_to_vision_wake_word(self):
+        """Respond to vision wake word with TTS greeting"""
+        try:
+            from services.tts_service import get_tts_service
+            from config import TTS_ENABLED, VISION_GREETING
+            
+            if TTS_ENABLED:
+                tts = get_tts_service()
+                if tts.is_available:
+                    print(f"🔊 Ruby: '{VISION_GREETING}'")
+                    
+                    # Speak greeting (fire-and-forget)
+                    asyncio.create_task(tts.speak_async(VISION_GREETING))
+        except Exception as e:
+            print(f"⚠️  Could not speak vision greeting: {e}")
+    
+    async def _handle_vision_command(self, command: str):
+        """
+        Handle vision command by capturing frame and processing with LLM vision
+        
+        Args:
+            command: Transcribed voice command from user
+        """
+        print(f"\n📸 Capturing camera frame for vision analysis...")
+        
+        try:
+            from services.face_detection_service import get_face_detection_service
+            from services.llm_service import get_llm_service
+            from config import (
+                LLM_ENABLED,
+                VISION_ENABLED,
+                VISION_MODEL,
+                VISION_SYSTEM_PROMPT,
+                VISION_FALLBACK_MESSAGE
+            )
+            
+            if not LLM_ENABLED or not VISION_ENABLED:
+                print("⚠️  Vision assistant disabled")
+                return
+            
+            # Get camera frame from face detection service
+            face_detector = get_face_detection_service()
+            
+            # Access shared frame
+            async with face_detector.frame_lock:
+                if face_detector.latest_frame is not None:
+                    # Copy frame (don't modify shared frame)
+                    image_frame = face_detector.latest_frame.copy()
+                    print(f"✅ Frame captured: {image_frame.shape}")
+                else:
+                    image_frame = None
+                    print("❌ No frame available from camera")
+            
+            # Check if frame is available
+            if image_frame is None:
+                # Speak fallback message
+                from services.tts_service import get_tts_service
+                from config import TTS_ENABLED
+                
+                if TTS_ENABLED:
+                    tts = get_tts_service()
+                    if tts.is_available:
+                        await tts.speak_async(VISION_FALLBACK_MESSAGE)
+                return
+            
+            # Process with LLM vision and speak response
+            llm = get_llm_service()
+            if llm.is_available:
+                await llm.process_vision_and_speak(
+                    image_frame,
+                    command,
+                    VISION_MODEL,
+                    VISION_SYSTEM_PROMPT
+                )
+            else:
+                print("⚠️  LLM not available for vision processing")
+                
+        except Exception as e:
+            print(f"❌ Error handling vision command: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def _record_command(self):
         """Record and transcribe command after wake word detected"""

@@ -71,3 +71,17 @@ LLM_SYSTEM_PROMPT: Final[str] = (
 )
 LLM_FALLBACK_MESSAGE: Final[str] = "I am not connected to internet right now"
 
+# Vision Assistant Configuration (OpenAI GPT-4o with vision)
+VISION_ENABLED: Final[bool] = True  # Enable vision-based commands
+VISION_WAKE_WORD: Final[str] = "watch ruby"  # Wake word for vision commands
+VISION_MODEL: Final[str] = "gpt-4o"  # GPT-4o (multimodal, fast, recommended)
+VISION_COMMAND_TIMEOUT: Final[int] = 5  # Seconds to record command after wake word
+VISION_GREETING: Final[str] = "I'm looking, go ahead"  # TTS greeting after wake word
+VISION_FALLBACK_MESSAGE: Final[str] = "I can't see right now, camera not ready"  # When camera unavailable
+VISION_SYSTEM_PROMPT: Final[str] = (
+    "You are Ruby, a vision assistant for senior citizens. "
+    "Look at the image and answer their question directly. "
+    "Be friendly, clear, and concise, super concise. Use easy words and avoid hard jargons. "
+    "Focus on what they asked about."
+)
+
