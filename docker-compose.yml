@@ -12,11 +12,13 @@ services:
       - DEBUG=True
       - HOST=0.0.0.0
       - PORT=8000
+      - TZ=Asia/Singapore  # Set your timezone (UTC, America/New_York, Europe/London, etc.)
     env_file:
       - .env
     volumes:
       - ./:/app
       - db_data:/app/data
+      - /etc/localtime:/etc/localtime:ro  # Sync with host timezone
     devices:
       - /dev/i2c-1:/dev/i2c-1
       - /dev/gpiomem:/dev/gpiomem

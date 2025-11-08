@@ -9,6 +9,7 @@ load_dotenv()
 USER_ID: Final[str] = "u_123"
 
 # Lambda API Configuration - loaded from .env
+# Single base URL for all Lambda functions (reminders, face recognition, etc.)
 LAMBDA_API_URL: Final[str] = os.getenv("LAMBDA_API_URL")
 
 # Sync Configuration
@@ -16,8 +17,8 @@ AUTO_SYNC_ON_STARTUP: Final[bool] = True
 CLEAR_ON_SYNC: Final[bool] = True  # Clear all local reminders before syncing
 
 # Reminder Execution Configuration
-ENABLE_REMINDER_EXECUTION: Final[bool] = False  # Set to True to enable scheduler
-CHECK_INTERVAL_SECONDS: Final[int] = 60  # How often to check for due reminders
+ENABLE_REMINDER_EXECUTION: Final[bool] = True  # Set to True to enable scheduler
+CHECK_INTERVAL_SECONDS: Final[int] = 60  # How often to check for due reminders (every 1 minute)
 
 # OLED Display Configuration
 OLED_ENABLED: Final[bool] = True  # Set to False to disable OLED display

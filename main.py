@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import init_db, AsyncSessionLocal
-from routers import reminders, webhooks, display
+from routers import reminders, webhooks, display, face_recognition
 from services.reminder_service import ReminderService
 from services.reminder_scheduler import get_scheduler
 from config import USER_ID, AUTO_SYNC_ON_STARTUP, CLEAR_ON_SYNC, ENABLE_REMINDER_EXECUTION
@@ -81,6 +81,7 @@ app.add_middleware(
 app.include_router(reminders.router)
 app.include_router(webhooks.router)
 app.include_router(display.router)
+app.include_router(face_recognition.router)
 
 
 @app.get("/")
@@ -90,7 +91,12 @@ async def root():
         "message": "Welcome to MediSpecs API - Smart Glass Assistant for Senior Citizens",
         "status": "running",
         "version": "1.0.0",
-        "features": ["Reminder Management", "Lambda API Sync"]
+        "features": [
+            "Reminder Management",
+            "Lambda API Sync",
+            "Face Recognition",
+            "OLED Display Control"
+        ]
     }
 
 

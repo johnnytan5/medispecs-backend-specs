@@ -38,7 +38,12 @@ class ReminderScheduler:
         
         self.is_running = True
         self.task = asyncio.create_task(self._scheduler_loop())
+        
+        # Display current time for verification
+        now = datetime.now()
         print(f"▶️  Reminder scheduler started for user: {self.user_id}")
+        print(f"⏰ Current system time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 Current day: {now.strftime('%A')} (weekday: {now.weekday()})")
     
     async def stop(self):
         """Stop the reminder scheduler"""
@@ -98,6 +103,9 @@ class ReminderScheduler:
                         display_message = reminder.title.upper()
                         if reminder.time_of_day:
                             display_message = f"{reminder.time_of_day} {display_message}"
+                        
+                        # Print what's being displayed on OLED
+                        print(f"// OLED// {display_message} //OLED//")
                         
                         # Display on OLED with blinking
                         oled.display_reminder(
