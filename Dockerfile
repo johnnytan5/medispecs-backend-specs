@@ -10,9 +10,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies (OLED/I2C, OpenCV, YOLO, picamera2, libcamera)
+# Install system dependencies (OLED/I2C, OpenCV, YOLO, camera)
+# Note: libcamera may not be available in standard Debian, but we try anyway
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
     python3-dev \
     libjpeg-dev \
     zlib1g-dev \
@@ -28,16 +30,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libgl1 \
     libcap-dev \
-    libcamera-dev \
-    libcamera0.4 \
-    python3-libcamera \
-    python3-picamera2 \
+    python3-numpy \
+    python3-pil \
+    libatlas-base-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
 COPY requirements.txt .
 
 # Install Python dependencies (with increased timeout for large packages like ultralytics)
+# Note: picamera2 will be installed via pip (requires system libs above)
 RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
 
 # Copy application code

@@ -5,12 +5,20 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 import os
 from pathlib import Path
 
+# Determine data directory (Docker vs local)
+if os.path.exists("/.dockerenv") or os.getcwd() == "/app":
+    # Running in Docker
+    data_dir = Path("/app/data")
+else:
+    # Running locally
+    data_dir = Path("./data")
+
 # Ensure data directory exists
-data_dir = Path("/app/data")
 data_dir.mkdir(parents=True, exist_ok=True)
 
-# SQLite database URL
-SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:////app/data/reminders.db"
+# SQLite database URL (use absolute path)
+db_path = data_dir.absolute() / "reminders.db"
+SQLALCHEMY_DATABASE_URL = f"sqlite+aiosqlite:///{db_path}"
 
 # Create async engine
 engine = create_async_engine(
