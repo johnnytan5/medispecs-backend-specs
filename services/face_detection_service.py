@@ -190,18 +190,18 @@ class FaceDetectionService:
         # Get frame from appropriate camera source
         if self.use_picamera:
             try:
-                # Capture frame from picamera2
+                # Capture frame from picamera2 (returns RGB)
                 frame = self.picam.capture_array()
                 
-                # picamera2 returns RGB, OpenCV uses BGR
-                frame_resized = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                # YOLO expects RGB format, picamera2 already provides RGB
+                # No conversion needed - already at 640x480 from config
+                frame_resized = frame
                 
-                # Already at 640x480 from config
             except Exception as e:
                 print(f"⚠️  Failed to capture frame from picamera2: {e}")
                 return
         else:
-            # Capture from OpenCV
+            # Capture from OpenCV (returns BGR)
             ret, frame = self.cap.read()
             if not ret:
                 print("⚠️  Failed to read frame from camera")
@@ -209,6 +209,8 @@ class FaceDetectionService:
             
             # Resize frame for faster processing
             frame_resized = cv2.resize(frame, (640, 480))
+            # Convert BGR to RGB for YOLO
+            frame_resized = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
         
         # Run YOLO detection
         results = self.model(frame_resized, stream=True, verbose=False)
@@ -292,11 +294,14 @@ class FaceDetectionService:
         Send face image to AWS Rekognition for identification
         
         Args:
-            face_image: OpenCV image (numpy array) of the face
+            face_image: RGB image (numpy array) from YOLO processing
         """
         try:
+            # Convert RGB to BGR for OpenCV encoding
+            face_bgr = cv2.cvtColor(face_image, cv2.COLOR_RGB2BGR)
+            
             # Encode face image to JPEG
-            _, buffer = cv2.imencode('.jpg', face_image)
+            _, buffer = cv2.imencode('.jpg', face_bgr)
             image_base64 = base64.b64encode(buffer).decode('utf-8')
             
             print(f"📸 Captured face image ({len(buffer)} bytes)")
