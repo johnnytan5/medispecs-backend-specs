@@ -5,7 +5,14 @@ from database import init_db, AsyncSessionLocal
 from routers import reminders, webhooks, display, face_recognition
 from services.reminder_service import ReminderService
 from services.reminder_scheduler import get_scheduler
-from config import USER_ID, AUTO_SYNC_ON_STARTUP, CLEAR_ON_SYNC, ENABLE_REMINDER_EXECUTION
+from services.face_detection_service import get_face_detection_service
+from config import (
+    USER_ID, 
+    AUTO_SYNC_ON_STARTUP, 
+    CLEAR_ON_SYNC, 
+    ENABLE_REMINDER_EXECUTION,
+    FACE_DETECTION_ENABLED
+)
 import asyncio
 
 
@@ -50,6 +57,15 @@ async def lifespan(app: FastAPI):
     else:
         print("⏸️  Reminder execution disabled (set ENABLE_REMINDER_EXECUTION=True to enable)")
     
+    # Start face detection service (if enabled)
+    face_detector = get_face_detection_service()
+    await face_detector.start()
+    
+    if FACE_DETECTION_ENABLED:
+        print(f"👤 Face detection enabled")
+    else:
+        print("⏸️  Face detection disabled (set FACE_DETECTION_ENABLED=True to enable)")
+    
     print(f"🎯 Service ready for user: {USER_ID}")
     print("=" * 60)
     
@@ -58,6 +74,7 @@ async def lifespan(app: FastAPI):
     # Shutdown: cleanup
     print("\n🛑 Shutting down MediSpecs API...")
     await scheduler.stop()
+    await face_detector.stop()
     print("=" * 60)
 
 
@@ -94,7 +111,8 @@ async def root():
         "features": [
             "Reminder Management",
             "Lambda API Sync",
-            "Face Recognition",
+            "Face Recognition (AWS Rekognition)",
+            "Face Detection (YOLO v8)",
             "OLED Display Control"
         ]
     }

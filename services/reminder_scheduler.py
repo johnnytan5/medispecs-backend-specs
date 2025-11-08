@@ -11,7 +11,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import AsyncSessionLocal
 from models import Reminder
-from config import USER_ID, CHECK_INTERVAL_SECONDS, ENABLE_REMINDER_EXECUTION
+from config import USER_ID, CHECK_INTERVAL_SECONDS, ENABLE_REMINDER_EXECUTION, DEBUG_SCHEDULER
 
 
 class ReminderScheduler:
@@ -83,12 +83,18 @@ class ReminderScheduler:
             result = await db.execute(stmt)
             reminders = result.scalars().all()
             
-            if not reminders:
-                return
-            
             now = datetime.now()
             current_time = now.time()
             current_day = now.weekday()  # 0=Monday, 6=Sunday
+            
+            # Log check activity (verbose for debugging)
+            if DEBUG_SCHEDULER:
+                print(f"⏰ [Scheduler Check] Time: {current_time.strftime('%H:%M:%S')}, Day: {current_day}, Reminders: {len(reminders)}")
+            
+            if not reminders:
+                if DEBUG_SCHEDULER:
+                    print(f"   ⚠️  No reminders in database to check")
+                return
             
             for reminder in reminders:
                 if self._is_reminder_due(reminder, current_time, current_day):
