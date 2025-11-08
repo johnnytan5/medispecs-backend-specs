@@ -30,7 +30,10 @@ sudo apt-get install -y \
     libcap-dev \
     python3-dev \
     gcc \
-    g++
+    g++ \
+    libjpeg-dev \
+    zlib1g-dev \
+    libfreetype6-dev
 
 echo "✅ System dependencies installed"
 echo ""

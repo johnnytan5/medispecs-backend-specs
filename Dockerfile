@@ -32,7 +32,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcap-dev \
     python3-numpy \
     python3-pil \
-    libatlas-base-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
