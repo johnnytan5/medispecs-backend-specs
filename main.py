@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import init_db, AsyncSessionLocal
-from routers import reminders, webhooks, display, face_recognition
+from routers import reminders, webhooks, display, face_recognition, streaming
 from services.reminder_service import ReminderService
 from services.reminder_scheduler import get_scheduler
 from services.face_detection_service import get_face_detection_service
@@ -99,6 +99,7 @@ app.include_router(reminders.router)
 app.include_router(webhooks.router)
 app.include_router(display.router)
 app.include_router(face_recognition.router)
+app.include_router(streaming.router)
 
 
 @app.get("/")
@@ -113,7 +114,8 @@ async def root():
             "Lambda API Sync",
             "Face Recognition (AWS Rekognition)",
             "Face Detection (YOLO v8)",
-            "OLED Display Control"
+            "OLED Display Control",
+            "Live Video Streaming (MJPEG)"
         ]
     }
 

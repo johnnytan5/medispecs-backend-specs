@@ -57,6 +57,10 @@ class FaceDetectionService:
         
         # Timing
         self.detection_interval = 1.0 / FACE_DETECTION_FPS  # 0.5 seconds for 2Hz
+        
+        # Frame sharing for streaming (RGB format)
+        self.latest_frame = None
+        self.frame_lock = asyncio.Lock()
     
     async def start(self):
         """Start the face detection service"""
@@ -199,6 +203,10 @@ class FaceDetectionService:
                 # No conversion needed - already at 640x480 from config
                 frame_resized = frame
                 
+                # Store frame for streaming (thread-safe copy in RGB format)
+                async with self.frame_lock:
+                    self.latest_frame = frame_resized.copy()
+                
             except Exception as e:
                 print(f"⚠️  Failed to capture frame from picamera2: {e}")
                 return
@@ -213,6 +221,10 @@ class FaceDetectionService:
             frame_resized = cv2.resize(frame, (640, 480))
             # Convert BGR to RGB for YOLO
             frame_resized = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+        
+        # Store frame for streaming (thread-safe copy in RGB format)
+        async with self.frame_lock:
+            self.latest_frame = frame_resized.copy()
         
         # Run YOLO detection
         results = self.model(frame_resized, stream=True, verbose=False)
