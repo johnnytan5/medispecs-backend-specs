@@ -7,6 +7,7 @@ the face and sends it to AWS Rekognition for identification.
 """
 
 import cv2
+import numpy as np
 import base64
 import time
 import asyncio
@@ -21,6 +22,13 @@ from config import (
     CAMERA_INDEX,
     YOLO_CONFIDENCE_THRESHOLD
 )
+
+# Try to import picamera2 (for Raspberry Pi)
+try:
+    from picamera2 import Picamera2
+    PICAMERA2_AVAILABLE = True
+except ImportError:
+    PICAMERA2_AVAILABLE = False
 
 
 class FaceDetectionService:
@@ -39,6 +47,8 @@ class FaceDetectionService:
         self.task: Optional[asyncio.Task] = None
         self.model = None
         self.cap = None
+        self.picam = None
+        self.use_picamera = False
         
         # Detection state
         self.consecutive_detections = 0
@@ -63,17 +73,45 @@ class FaceDetectionService:
             self.model = YOLO(YOLO_MODEL)
             print(f"✅ YOLO model loaded successfully")
             
-            print(f"📷 Opening camera (index: {CAMERA_INDEX})")
-            self.cap = cv2.VideoCapture(CAMERA_INDEX)
+            # Try picamera2 first (for Raspberry Pi), then fall back to OpenCV
+            if PICAMERA2_AVAILABLE:
+                try:
+                    print(f"📷 Attempting to open Pi Camera using picamera2...")
+                    self.picam = Picamera2()
+                    
+                    # Configure camera for 640x480 (matches our resize target)
+                    config = self.picam.create_preview_configuration(
+                        main={"size": (640, 480), "format": "RGB888"}
+                    )
+                    self.picam.configure(config)
+                    self.picam.start()
+                    
+                    # Give camera time to initialize
+                    time.sleep(2)
+                    
+                    self.use_picamera = True
+                    print(f"✅ Pi Camera opened successfully (picamera2)")
+                    
+                except Exception as e:
+                    print(f"⚠️  Failed to open picamera2: {e}")
+                    print(f"   Falling back to OpenCV...")
+                    self.use_picamera = False
             
-            if not self.cap.isOpened():
-                print(f"❌ Failed to open camera at index {CAMERA_INDEX}")
-                return
-            
-            print(f"✅ Camera opened successfully")
+            # Fallback to OpenCV (for USB cameras or if picamera2 fails)
+            if not self.use_picamera:
+                print(f"📷 Opening camera using OpenCV (index: {CAMERA_INDEX})")
+                self.cap = cv2.VideoCapture(CAMERA_INDEX)
+                
+                if not self.cap.isOpened():
+                    print(f"❌ Failed to open camera at index {CAMERA_INDEX}")
+                    return
+                
+                print(f"✅ Camera opened successfully (OpenCV)")
             
         except Exception as e:
             print(f"❌ Failed to initialize face detection: {e}")
+            import traceback
+            traceback.print_exc()
             return
         
         self.is_running = True
@@ -97,6 +135,13 @@ class FaceDetectionService:
             try:
                 await self.task
             except asyncio.CancelledError:
+                pass
+        
+        # Release camera resources
+        if self.use_picamera and self.picam:
+            try:
+                self.picam.stop()
+            except:
                 pass
         
         if self.cap:
@@ -128,13 +173,29 @@ class FaceDetectionService:
     
     async def _process_frame(self):
         """Process a single frame for face detection"""
-        ret, frame = self.cap.read()
-        if not ret:
-            print("⚠️  Failed to read frame from camera")
-            return
         
-        # Resize frame for faster processing
-        frame_resized = cv2.resize(frame, (640, 480))
+        # Get frame from appropriate camera source
+        if self.use_picamera:
+            try:
+                # Capture frame from picamera2
+                frame = self.picam.capture_array()
+                
+                # picamera2 returns RGB, OpenCV uses BGR
+                frame_resized = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                
+                # Already at 640x480 from config
+            except Exception as e:
+                print(f"⚠️  Failed to capture frame from picamera2: {e}")
+                return
+        else:
+            # Capture from OpenCV
+            ret, frame = self.cap.read()
+            if not ret:
+                print("⚠️  Failed to read frame from camera")
+                return
+            
+            # Resize frame for faster processing
+            frame_resized = cv2.resize(frame, (640, 480))
         
         # Run YOLO detection
         results = self.model(frame_resized, stream=True, verbose=False)

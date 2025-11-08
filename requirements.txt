@@ -14,3 +14,4 @@ Pillow>=10.2.0
 luma.oled>=3.12.0
 opencv-python-headless>=4.8.1.78
 ultralytics>=8.0.227
+picamera2; platform_machine == "aarch64"  # Only install on Raspberry Pi
