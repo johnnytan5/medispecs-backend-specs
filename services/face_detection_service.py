@@ -20,7 +20,8 @@ from config import (
     FACE_COOLDOWN_SECONDS,
     YOLO_MODEL,
     CAMERA_INDEX,
-    YOLO_CONFIDENCE_THRESHOLD
+    YOLO_CONFIDENCE_THRESHOLD,
+    YOLO_MIN_DETECTION_AREA
 )
 
 # Try to import picamera2 (for Raspberry Pi)
@@ -133,6 +134,7 @@ class FaceDetectionService:
         print(f"▶️  Face detection started")
         print(f"   Detection rate: {FACE_DETECTION_FPS}Hz")
         print(f"   Confidence threshold: {YOLO_CONFIDENCE_THRESHOLD:.2f}")
+        print(f"   Minimum area: {YOLO_MIN_DETECTION_AREA:,} px² (filters distant/small detections)")
         print(f"   Confirmation: {FACE_CONFIRMATION_COUNT} consecutive detections")
         print(f"   Cooldown: {FACE_COOLDOWN_SECONDS} seconds")
     
@@ -239,24 +241,30 @@ class FaceDetectionService:
         # If we have valid detections, use only the most confident one
         faces_to_process = []
         if valid_detections:
-            person_detected = True
-            
             # Sort by confidence (highest first)
             valid_detections.sort(key=lambda d: d['confidence'], reverse=True)
             
             # Take only the most confident detection
             best_detection = valid_detections[0]
-            x1, y1, x2, y2 = best_detection['box']
             
-            # Extract face crop (upper half of person box)
-            h = y2 - y1
-            face_crop = frame_resized[y1:y1 + h//2, x1:x2]
-            
-            faces_to_process.append(face_crop)
-            
-            # Log the detection
-            print(f"👤 Person detected (confidence: {best_detection['confidence']:.2f}, " +
-                  f"area: {best_detection['area']} px²)")
+            # Check if detection is large enough for face recognition
+            if best_detection['area'] >= YOLO_MIN_DETECTION_AREA:
+                person_detected = True
+                x1, y1, x2, y2 = best_detection['box']
+                
+                # Extract face crop (upper half of person box)
+                h = y2 - y1
+                face_crop = frame_resized[y1:y1 + h//2, x1:x2]
+                
+                faces_to_process.append(face_crop)
+                
+                # Log the detection
+                print(f"👤 Person detected (confidence: {best_detection['confidence']:.2f}, " +
+                      f"area: {best_detection['area']} px²)")
+            else:
+                # Detection too small - ignore
+                print(f"⚠️  Person detected but too small (area: {best_detection['area']} px², " +
+                      f"minimum: {YOLO_MIN_DETECTION_AREA} px²) - ignoring")
         
         # Update detection counter
         if person_detected:
@@ -333,13 +341,16 @@ class FaceDetectionService:
                 # Display on OLED
                 try:
                     oled = get_oled_service()
-                    display_message = f"Hello {name}!"
-                    if relationship:
-                        display_message += f"\n({relationship})"
                     
-                    oled.display_wrapped_message(
+                    # Format message for OLED display: "Johnny (Son)"
+                    if relationship:
+                        display_message = f"{name} ({relationship})"
+                    else:
+                        display_message = name
+                    
+                    # Use smart display dispatcher (automatically chooses single-line, wrapped, or scrolling)
+                    oled.display_reminder(
                         message=display_message,
-                        max_chars_per_line=16,
                         font_size=14,
                         should_blink=True,
                         display_time=10

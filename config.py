@@ -35,4 +35,5 @@ FACE_COOLDOWN_SECONDS: Final[int] = 10  # Wait time before detecting same area a
 YOLO_MODEL: Final[str] = "yolov8n.pt"  # YOLO model (nano for speed)
 CAMERA_INDEX: Final[int] = 0  # Camera device index (0 for default USB/Pi camera)
 YOLO_CONFIDENCE_THRESHOLD: Final[float] = 0.65  # Minimum confidence (0.0-1.0) to consider a detection valid
+YOLO_MIN_DETECTION_AREA: Final[int] = 100000  # Minimum bounding box area (px²) for face recognition (filters out distant/small detections)
 
