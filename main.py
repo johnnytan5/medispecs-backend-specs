@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import init_db, AsyncSessionLocal
-from routers import reminders, webhooks, display, face_recognition, streaming
+from routers import reminders, webhooks, display, face_recognition, streaming, tts
 from services.reminder_service import ReminderService
 from services.reminder_scheduler import get_scheduler
 from services.face_detection_service import get_face_detection_service
@@ -11,7 +11,8 @@ from config import (
     AUTO_SYNC_ON_STARTUP, 
     CLEAR_ON_SYNC, 
     ENABLE_REMINDER_EXECUTION,
-    FACE_DETECTION_ENABLED
+    FACE_DETECTION_ENABLED,
+    TTS_ENABLED
 )
 import asyncio
 
@@ -66,6 +67,17 @@ async def lifespan(app: FastAPI):
     else:
         print("⏸️  Face detection disabled (set FACE_DETECTION_ENABLED=True to enable)")
     
+    # Initialize Text-to-Speech service (if enabled)
+    if TTS_ENABLED:
+        from services.tts_service import get_tts_service
+        tts = get_tts_service()
+        if tts.is_available:
+            print(f"🔊 Text-to-Speech enabled")
+        else:
+            print(f"⚠️  Text-to-Speech initialization failed (voice output disabled)")
+    else:
+        print("⏸️  Text-to-Speech disabled (set TTS_ENABLED=True to enable)")
+    
     print(f"🎯 Service ready for user: {USER_ID}")
     print("=" * 60)
     
@@ -100,6 +112,7 @@ app.include_router(webhooks.router)
 app.include_router(display.router)
 app.include_router(face_recognition.router)
 app.include_router(streaming.router)
+app.include_router(tts.router)
 
 
 @app.get("/")
@@ -115,7 +128,8 @@ async def root():
             "Face Recognition (AWS Rekognition)",
             "Face Detection (YOLO v8)",
             "OLED Display Control",
-            "Live Video Streaming (MJPEG)"
+            "Live Video Streaming (MJPEG)",
+            "Text-to-Speech (Voice Reminders & Greetings)"
         ]
     }
 

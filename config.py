@@ -37,3 +37,18 @@ CAMERA_INDEX: Final[int] = 0  # Camera device index (0 for default USB/Pi camera
 YOLO_CONFIDENCE_THRESHOLD: Final[float] = 0.65  # Minimum confidence (0.0-1.0) to consider a detection valid
 YOLO_MIN_DETECTION_AREA: Final[int] = 100000  # Minimum bounding box area (px²) for face recognition (filters out distant/small detections)
 
+# Text-to-Speech Configuration
+TTS_ENABLED: Final[bool] = True  # Set to True to enable voice output
+TTS_RATE: Final[int] = 130  # Speech rate in words per minute (100-130 recommended for seniors, slower than normal 150-200)
+TTS_VOLUME: Final[float] = 0.9  # Volume level (0.0-1.0)
+TTS_PREFER_FEMALE_VOICE: Final[bool] = True  # Use female voice if available
+
+# TTS for different events
+TTS_SPEAK_REMINDERS: Final[bool] = True  # Speak reminder text
+TTS_SPEAK_FACE_GREETINGS: Final[bool] = True  # Speak greeting when face is recognized
+
+# Future: ElevenLabs integration (set to enable custom voices)
+TTS_ELEVENLABS_ENABLED: Final[bool] = False  # ElevenLabs custom voices (requires API key)
+TTS_ELEVENLABS_API_KEY: Final[str] = os.getenv("ELEVENLABS_API_KEY", "")  # ElevenLabs API key
+TTS_ELEVENLABS_VOICE_ID: Final[str] = os.getenv("ELEVENLABS_VOICE_ID", "")  # Custom voice ID
+

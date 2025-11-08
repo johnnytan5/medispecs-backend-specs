@@ -123,8 +123,20 @@ class ReminderScheduler:
                     except Exception as e:
                         print(f"❌ Error displaying reminder on OLED: {e}")
                     
+                    # Speak reminder (voice output)
+                    try:
+                        from services.tts_service import get_tts_service
+                        from config import TTS_ENABLED, TTS_SPEAK_REMINDERS
+                        
+                        if TTS_ENABLED and TTS_SPEAK_REMINDERS:
+                            tts = get_tts_service()
+                            if tts.is_available:
+                                # Just speak the reminder title/task (not the time)
+                                await tts.speak_async(reminder.title)
+                    except Exception as e:
+                        print(f"❌ Error speaking reminder: {e}")
+                    
                     # Additional actions can be added here:
-                    # - Play audio reminder
                     # - Send push notification
                     # - Log the execution
     

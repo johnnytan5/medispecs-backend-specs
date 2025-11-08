@@ -369,6 +369,20 @@ class FaceDetectionService:
                     )
                 except Exception as e:
                     print(f"⚠️  Could not display on OLED: {e}")
+                
+                # Speak greeting (voice output)
+                try:
+                    from services.tts_service import get_tts_service
+                    from config import TTS_ENABLED, TTS_SPEAK_FACE_GREETINGS
+                    
+                    if TTS_ENABLED and TTS_SPEAK_FACE_GREETINGS:
+                        tts = get_tts_service()
+                        if tts.is_available:
+                            # Create greeting: "Hello Johnny!"
+                            greeting = f"Hello {name}!"
+                            await tts.speak_async(greeting)
+                except Exception as e:
+                    print(f"⚠️  Could not speak greeting: {e}")
             
             else:
                 # No match - stay silent as requested
