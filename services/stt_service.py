@@ -253,6 +253,10 @@ class STTService:
                                     # Record command
                                     command = await self._record_command()
                                     
+                                    # Process text command with LLM
+                                    if command:
+                                        await self._handle_text_command(command)
+                                    
                                     # Reset for next wake word
                                     self.wake_word_detected = False
                                     print(f"\n🎧 Listening for '{self.wake_word}' or '{self.vision_wake_word}'...")
@@ -310,6 +314,31 @@ class STTService:
                     asyncio.create_task(tts.speak_async(VISION_GREETING))
         except Exception as e:
             print(f"⚠️  Could not speak vision greeting: {e}")
+    
+    async def _handle_text_command(self, command: str):
+        """
+        Handle text command by processing with LLM (text-only)
+        
+        Args:
+            command: Transcribed voice command from user
+        """
+        try:
+            from services.llm_service import get_llm_service
+            from config import LLM_ENABLED
+            
+            if LLM_ENABLED:
+                llm = get_llm_service()
+                if llm.is_available:
+                    # Send to LLM and speak response
+                    await llm.process_and_speak(command)
+                else:
+                    print("⚠️  LLM not available, command logged only")
+            else:
+                print("⚠️  LLM disabled, command logged only")
+        except Exception as e:
+            print(f"❌ Error processing text command: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def _handle_vision_command(self, command: str):
         """
@@ -437,30 +466,6 @@ class STTService:
             
             # Log to console for debugging
             print(f"📝 Logged command: {full_command}")
-            
-            # Process with LLM and speak response
-            try:
-                from services.llm_service import get_llm_service
-                from config import LLM_ENABLED
-                
-                if LLM_ENABLED:
-                    llm = get_llm_service()
-                    if llm.is_available:
-                        # Send to LLM and speak response
-                        await llm.process_and_speak(full_command)
-                    else:
-                        print("⚠️  LLM not available, command logged only")
-                else:
-                    print("⚠️  LLM disabled, command logged only")
-            except Exception as e:
-                print(f"❌ Error processing with LLM: {e}")
-            
-            # Callback with command (for additional custom handling)
-            if self.on_command_callback:
-                try:
-                    await self.on_command_callback(full_command)
-                except Exception as e:
-                    print(f"❌ Error in command callback: {e}")
         else:
             print("⚠️  [NO COMMAND] Silence or unclear audio")
             print("-"*60)
