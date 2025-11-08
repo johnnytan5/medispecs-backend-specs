@@ -1,0 +1,312 @@
+================================================================================
+RASPBERRY PI SETUP GUIDE - MediSpecs Smart Glass
+================================================================================
+
+This guide covers how to set up and run the MediSpecs backend on Raspberry Pi
+with camera, OLED display, and face detection.
+
+================================================================================
+PREREQUISITES
+================================================================================
+
+1. Raspberry Pi (3B+, 4, or 5 recommended)
+2. Raspberry Pi OS (64-bit recommended)
+3. Docker and Docker Compose installed
+4. USB Camera OR Pi Camera Module
+5. OLED Display (SSD1306 via I2C) - optional
+6. Internet connection
+
+
+================================================================================
+STEP 1: ENABLE CAMERA
+================================================================================
+
+For Pi Camera Module (CSI):
+---------------------------
+1. Connect camera to CSI port
+2. Enable legacy camera support:
+   $ sudo raspi-config
+   → Interface Options → Legacy Camera → Enable
+   → Reboot
+
+3. Load v4l2 driver for camera:
+   $ sudo modprobe bcm2835-v4l2
+   
+4. Make it permanent:
+   $ echo "bcm2835-v4l2" | sudo tee -a /etc/modules
+
+5. Verify camera is accessible:
+   $ ls -l /dev/video*
+   # Should show /dev/video0
+
+For USB Camera:
+--------------
+1. Plug in USB camera
+2. Verify it's detected:
+   $ ls -l /dev/video*
+   # Should show /dev/video0
+
+3. Test with:
+   $ v4l2-ctl --list-devices
+
+
+================================================================================
+STEP 2: ENABLE I2C (FOR OLED DISPLAY)
+================================================================================
+
+1. Enable I2C:
+   $ sudo raspi-config
+   → Interface Options → I2C → Enable
+   → Reboot
+
+2. Verify I2C is working:
+   $ sudo i2cdetect -y 1
+   # Should show device at address 0x3c (OLED)
+
+
+================================================================================
+STEP 3: INSTALL DOCKER
+================================================================================
+
+If Docker is not already installed:
+
+1. Install Docker:
+   $ curl -fsSL https://get.docker.com -o get-docker.sh
+   $ sudo sh get-docker.sh
+   
+2. Add user to docker group:
+   $ sudo usermod -aG docker $USER
+   $ newgrp docker
+   
+3. Install Docker Compose:
+   $ sudo apt-get install -y docker-compose
+
+
+================================================================================
+STEP 4: CLONE AND CONFIGURE PROJECT
+================================================================================
+
+1. Clone/copy the project to Raspberry Pi:
+   $ git clone <your-repo> medispecs-backend-specs
+   $ cd medispecs-backend-specs
+
+2. Create .env file:
+   $ nano .env
+   
+   Add this line:
+   LAMBDA_API_URL=https://zqglpdheqk.execute-api.ap-southeast-1.amazonaws.com/staging
+
+3. Verify camera device:
+   $ ls -l /dev/video0
+   
+   If camera is on different device (e.g., /dev/video1), update docker-compose.yml:
+   devices:
+     - /dev/video1:/dev/video0  # Map video1 to video0 inside container
+
+
+================================================================================
+STEP 5: BUILD AND RUN
+================================================================================
+
+1. Build the Docker image:
+   $ docker-compose build
+   
+   Note: First build takes 5-10 minutes on Raspberry Pi
+   (downloading and compiling packages)
+
+2. Start the service:
+   $ docker-compose up
+   
+   Or run in background:
+   $ docker-compose up -d
+
+3. View logs:
+   $ docker-compose logs -f
+
+4. Stop the service:
+   $ docker-compose down
+
+
+================================================================================
+STEP 6: VERIFY EVERYTHING IS WORKING
+================================================================================
+
+Expected startup logs:
+---------------------
+🚀 Starting MediSpecs API...
+✅ Database initialized successfully
+🔄 Starting initial sync for user: u_123
+✅ Successfully synced X reminders from Lambda API
+▶️  Reminder scheduler started
+⏰ Current system time: 2024-11-08 14:30:00
+📅 Current day: Friday (weekday: 4)
+⏰ Reminder execution enabled - checking every 60 seconds
+🔍 Loading YOLO model: yolov8n.pt
+✅ YOLO model loaded successfully
+📷 Opening camera (index: 0)
+✅ Camera opened successfully
+▶️  Face detection started
+   Detection rate: 2Hz
+   Confidence threshold: 0.65
+   Confirmation: 4 consecutive detections
+   Cooldown: 10 seconds
+🎯 Service ready for user: u_123
+
+
+Test face detection:
+-------------------
+Position yourself in front of the camera, you should see:
+
+👤 Person detected (confidence: 0.87, area: 130146 px²)
+   Counter: 1/4
+👤 Person detected (confidence: 0.89, area: 129600 px²)
+   Counter: 2/4
+👤 Person detected (confidence: 0.88, area: 130572 px²)
+   Counter: 3/4
+👤 Person detected (confidence: 0.90, area: 129523 px²)
+   Counter: 4/4
+✅ Face confirmed! Processing 1 face(s)...
+📸 Captured face image (15234 bytes)
+🔍 Sending face recognition request to Lambda API...
+
+🎉 FACE RECOGNIZED!
+   Name: jordan tan
+   Relationship: son
+   Confidence: 95.2%
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Camera not working:
+------------------
+Error: "Failed to open camera"
+Solution:
+  1. Check camera is connected and detected:
+     $ ls -l /dev/video*
+  2. Verify camera permissions:
+     $ sudo chmod 666 /dev/video0
+  3. Check if another process is using camera:
+     $ sudo fuser /dev/video0
+  4. Restart Docker:
+     $ docker-compose restart
+
+OLED not working:
+----------------
+Error: "OLED hardware not available"
+Solution:
+  1. Check I2C is enabled:
+     $ sudo i2cdetect -y 1
+  2. Verify OLED is at address 0x3c
+  3. If at 0x3d, update oled_device.py:
+     serial = i2c(port=1, address=0x3d)
+
+Out of memory:
+-------------
+Error: Build fails with "Killed" or "Out of memory"
+Solution:
+  1. Increase swap space:
+     $ sudo dphys-swapfile swapoff
+     $ sudo nano /etc/dphys-swapfile
+     # Change CONF_SWAPSIZE=100 to CONF_SWAPSIZE=2048
+     $ sudo dphys-swapfile setup
+     $ sudo dphys-swapfile swapon
+  2. Retry build
+
+Slow performance:
+----------------
+- Raspberry Pi 3B or older might be slow
+- Consider:
+  - Using lower resolution: Edit face_detection_service.py
+    frame_resized = cv2.resize(frame, (320, 240))  # Smaller
+  - Reduce detection rate: Edit config.py
+    FACE_DETECTION_FPS = 1  # 1Hz instead of 2Hz
+
+
+================================================================================
+CONFIGURATION OPTIONS
+================================================================================
+
+Edit config.py to adjust behavior:
+
+# Enable/disable features
+ENABLE_REMINDER_EXECUTION = True          # Reminder scheduler
+FACE_DETECTION_ENABLED = True             # Face detection
+
+# Face detection settings
+FACE_DETECTION_FPS = 2                    # Detection rate (Hz)
+FACE_CONFIRMATION_COUNT = 4               # Confirmations needed
+FACE_COOLDOWN_SECONDS = 10                # Cooldown between detections
+YOLO_CONFIDENCE_THRESHOLD = 0.65          # Detection confidence (0-1)
+CAMERA_INDEX = 0                          # Camera device index
+
+# Reminder settings
+CHECK_INTERVAL_SECONDS = 60               # Check reminders every 60s
+
+# OLED display
+OLED_ENABLED = True                       # Enable OLED display
+OLED_FONT_SIZE = 14                       # Font size
+OLED_BLINK_ON_REMINDER = True             # Blink on reminder
+
+
+================================================================================
+USEFUL COMMANDS
+================================================================================
+
+# View logs
+docker-compose logs -f
+
+# Restart service
+docker-compose restart
+
+# Stop service
+docker-compose down
+
+# Rebuild after code changes
+docker-compose build && docker-compose up
+
+# Remove everything and start fresh
+docker-compose down -v
+docker-compose build --no-cache
+docker-compose up
+
+# Check system resources
+docker stats
+
+# Enter container shell
+docker-compose exec api /bin/bash
+
+
+================================================================================
+PRODUCTION DEPLOYMENT
+================================================================================
+
+For production use:
+
+1. Remove --reload from command in docker-compose.yml:
+   command: uvicorn main:app --host 0.0.0.0 --port 8000
+
+2. Set restart policy:
+   restart: always
+
+3. Run in background:
+   docker-compose up -d
+
+4. Set up auto-start on boot:
+   $ sudo systemctl enable docker
+   $ sudo systemctl start docker
+
+
+================================================================================
+SUPPORT
+================================================================================
+
+If you encounter issues:
+1. Check logs: docker-compose logs -f
+2. Verify hardware connections
+3. Check camera/I2C permissions
+4. Ensure .env file is configured correctly
+
+================================================================================
+

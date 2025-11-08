@@ -20,9 +20,10 @@ services:
       - db_data:/app/data
       - /etc/localtime:/etc/localtime:ro  # Sync with host timezone
     devices:
-      - /dev/i2c-1:/dev/i2c-1
-      - /dev/gpiomem:/dev/gpiomem
-    privileged: true
+      - /dev/i2c-1:/dev/i2c-1          # OLED display via I2C
+      - /dev/gpiomem:/dev/gpiomem      # GPIO access
+      - /dev/video0:/dev/video0        # Camera (USB or Pi Camera via v4l2)
+    privileged: true                    # Required for hardware access
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
     networks:
