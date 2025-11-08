@@ -105,30 +105,30 @@ class ReminderScheduler:
                     if reminder.time_of_day:
                         display_message = f"{reminder.time_of_day} {display_message}"
                     
-                    # Speak reminder FIRST (immediate, no delay!)
+                    # Speak reminder and display on OLED SIMULTANEOUSLY (both fire-and-forget)
                     try:
                         from services.tts_service import get_tts_service
                         from config import TTS_ENABLED, TTS_SPEAK_REMINDERS
+                        import asyncio
                         
                         if TTS_ENABLED and TTS_SPEAK_REMINDERS:
                             tts = get_tts_service()
                             if tts.is_available:
-                                # Just speak the reminder title/task (not the time)
-                                await tts.speak_async(reminder.title)
+                                # Fire TTS in background (doesn't wait for completion)
+                                asyncio.create_task(tts.speak_async(reminder.title))
                     except Exception as e:
                         print(f"❌ Error speaking reminder: {e}")
                     
-                    # Display on OLED (fire-and-forget, runs in background for 10s)
+                    # Display on OLED (also fire-and-forget, runs in background for 10s)
                     try:
                         from services.oled_display import get_oled_service
-                        import asyncio
                         
                         oled = get_oled_service()
                         
                         # Print what's being displayed on OLED
                         print(f"// OLED// {display_message} //OLED//")
                         
-                        # Run OLED display in background (doesn't block)
+                        # Fire OLED display in background (doesn't block)
                         asyncio.create_task(
                             asyncio.to_thread(
                                 oled.display_reminder,

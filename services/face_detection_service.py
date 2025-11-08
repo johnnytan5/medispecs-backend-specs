@@ -356,7 +356,7 @@ class FaceDetectionService:
                 else:
                     display_message = name
                 
-                # Speak greeting FIRST (immediate, no delay!)
+                # Speak greeting and display on OLED SIMULTANEOUSLY (both fire-and-forget)
                 try:
                     from services.tts_service import get_tts_service
                     from config import TTS_ENABLED, TTS_SPEAK_FACE_GREETINGS
@@ -366,15 +366,16 @@ class FaceDetectionService:
                         if tts.is_available:
                             # Create greeting: "Hello Johnny!"
                             greeting = f"Hello {name}!"
-                            await tts.speak_async(greeting)
+                            # Fire TTS in background (doesn't wait for completion)
+                            asyncio.create_task(tts.speak_async(greeting))
                 except Exception as e:
                     print(f"⚠️  Could not speak greeting: {e}")
                 
-                # Display on OLED (fire-and-forget, runs in background for 10s)
+                # Display on OLED (also fire-and-forget, runs in background for 10s)
                 try:
                     oled = get_oled_service()
                     
-                    # Run OLED display in background (doesn't block)
+                    # Fire OLED display in background (doesn't block)
                     asyncio.create_task(
                         asyncio.to_thread(
                             oled.display_reminder,
