@@ -21,5 +21,10 @@ gTTS==2.5.1  # Google Text-to-Speech (high quality, requires internet)
 pygame==2.5.2  # Audio playback for gTTS
 pyttsx3==2.90  # Offline TTS fallback (basic quality)
 
+# Speech-to-Text (Vosk - offline speech recognition)
+vosk==0.3.45  # Offline speech recognition
+sounddevice==0.4.6  # Audio recording from microphone
+numpy>=1.24.0  # Required for audio processing
+
 # picamera2 - Not in requirements, installed separately for Docker/Pi
 # Note: On Raspberry Pi, also install: sudo apt-get install espeak espeak-ng

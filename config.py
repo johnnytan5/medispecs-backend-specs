@@ -1,5 +1,5 @@
 import os
-from typing import Final
+from typing import Final, Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -51,4 +51,17 @@ TTS_SPEAK_FACE_GREETINGS: Final[bool] = True  # Speak greeting when face is reco
 TTS_ELEVENLABS_ENABLED: Final[bool] = False  # ElevenLabs custom voices (requires API key)
 TTS_ELEVENLABS_API_KEY: Final[str] = os.getenv("ELEVENLABS_API_KEY", "")  # ElevenLabs API key
 TTS_ELEVENLABS_VOICE_ID: Final[str] = os.getenv("ELEVENLABS_VOICE_ID", "")  # Custom voice ID
+
+# Speech-to-Text Configuration (Vosk)
+STT_ENABLED: Final[bool] = True  # Set to True to enable voice commands
+STT_MODEL_PATH: Final[str] = os.getenv("STT_MODEL_PATH", "vosk-model-en-us-0.22")  # Path to Vosk model
+STT_WAKE_WORD: Final[str] = "hey ruby"  # Wake word to activate voice commands
+STT_COMMAND_TIMEOUT: Final[int] = 5  # Seconds to record command after wake word
+STT_SAMPLE_RATE: Final[int] = 16000  # Audio sample rate (16kHz standard for speech)
+STT_DEVICE_INDEX: Optional[int] = None  # Audio device index (None = default, or specific USB mic index)
+
+# Future: OpenAI LLM integration for processing voice commands
+STT_OPENAI_ENABLED: Final[bool] = False  # Enable OpenAI LLM for command processing
+STT_OPENAI_API_KEY: Final[str] = os.getenv("OPENAI_API_KEY", "")  # OpenAI API key
+STT_OPENAI_MODEL: Final[str] = "gpt-4"  # Model to use for command processing
 

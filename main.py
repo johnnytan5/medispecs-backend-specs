@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import init_db, AsyncSessionLocal
-from routers import reminders, webhooks, display, face_recognition, streaming, tts
+from routers import reminders, webhooks, display, face_recognition, streaming, tts, stt
 from services.reminder_service import ReminderService
 from services.reminder_scheduler import get_scheduler
 from services.face_detection_service import get_face_detection_service
@@ -12,7 +12,10 @@ from config import (
     CLEAR_ON_SYNC, 
     ENABLE_REMINDER_EXECUTION,
     FACE_DETECTION_ENABLED,
-    TTS_ENABLED
+    TTS_ENABLED,
+    STT_ENABLED,
+    STT_MODEL_PATH,
+    STT_DEVICE_INDEX
 )
 import asyncio
 
@@ -78,6 +81,27 @@ async def lifespan(app: FastAPI):
     else:
         print("⏸️  Text-to-Speech disabled (set TTS_ENABLED=True to enable)")
     
+    # Initialize Speech-to-Text service (if enabled)
+    stt_service = None
+    if STT_ENABLED:
+        from services.stt_service import get_stt_service
+        stt_service = get_stt_service()
+        
+        # Initialize with model
+        if stt_service.initialize(STT_MODEL_PATH, STT_DEVICE_INDEX):
+            print(f"🎤 Speech-to-Text initialized")
+            
+            # Start continuous listening for wake word
+            await stt_service.start()
+            print(f"👂 Listening for wake word: '{stt_service.wake_word}'")
+        else:
+            print(f"⚠️  Speech-to-Text initialization failed")
+            print(f"   Download Vosk model from: https://alphacephei.com/vosk/models")
+            print(f"   Place model in: {STT_MODEL_PATH}")
+            stt_service = None
+    else:
+        print("⏸️  Speech-to-Text disabled (set STT_ENABLED=True to enable)")
+    
     print(f"🎯 Service ready for user: {USER_ID}")
     print("=" * 60)
     
@@ -87,6 +111,11 @@ async def lifespan(app: FastAPI):
     print("\n🛑 Shutting down MediSpecs API...")
     await scheduler.stop()
     await face_detector.stop()
+    
+    # Stop STT service if running
+    if stt_service and stt_service.is_running:
+        await stt_service.stop()
+    
     print("=" * 60)
 
 
@@ -113,6 +142,7 @@ app.include_router(display.router)
 app.include_router(face_recognition.router)
 app.include_router(streaming.router)
 app.include_router(tts.router)
+app.include_router(stt.router)
 
 
 @app.get("/")
@@ -129,7 +159,8 @@ async def root():
             "Face Detection (YOLO v8)",
             "OLED Display Control",
             "Live Video Streaming (MJPEG)",
-            "Text-to-Speech (Voice Reminders & Greetings)"
+            "Text-to-Speech (Voice Reminders & Greetings)",
+            "Speech-to-Text (Voice Commands with Wake Word)"
         ]
     }
 

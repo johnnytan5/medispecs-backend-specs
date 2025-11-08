@@ -1,0 +1,283 @@
+================================================================================
+SPEECH-TO-TEXT (STT) SETUP GUIDE
+MediSpecs - Voice Commands with Wake Word Detection
+================================================================================
+
+🎤 WHAT IS THIS?
+--------------------------------------------------------------------------------
+Speech-to-Text service that listens for "Hey Ruby" and transcribes commands.
+Uses Vosk for offline, real-time speech recognition on Raspberry Pi.
+
+Features:
+- Wake word detection ("Hey Ruby")
+- Offline operation (no internet required)
+- USB microphone support
+- Low latency (~100ms)
+- Lightweight (50MB model)
+- Prepared for OpenAI LLM integration
+
+
+🔧 INSTALLATION
+--------------------------------------------------------------------------------
+
+Step 1: Install Python Dependencies
+------------------------------------
+cd /Users/johnnytan/Documents/medispecs-backend-specs
+pip install vosk sounddevice numpy
+
+Or install all requirements:
+pip install -r requirements.txt
+
+
+Step 2: Download Vosk Model
+----------------------------
+1. Go to: https://alphacephei.com/vosk/models
+2. Download "vosk-model-small-en-us-0.22" (50MB) or "vosk-model-en-us-0.22" (1.8GB)
+3. Extract the model to your project directory
+
+Example:
+wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.22.zip
+unzip vosk-model-small-en-us-0.22.zip
+mv vosk-model-small-en-us-0.22 vosk-model-en-us-0.22
+
+Your directory should look like:
+medispecs-backend-specs/
+  ├── vosk-model-en-us-0.22/
+  │   ├── am/
+  │   ├── graph/
+  │   ├── ivector/
+  │   └── conf/
+  ├── main.py
+  └── ...
+
+
+Step 3: System-Level Dependencies (Raspberry Pi)
+-------------------------------------------------
+On Raspberry Pi, install PortAudio for sounddevice:
+
+sudo apt-get update
+sudo apt-get install -y portaudio19-dev python3-pyaudio
+
+For USB microphone support:
+sudo apt-get install -y alsa-utils
+
+
+Step 4: Configure Audio Device (Optional)
+------------------------------------------
+If you have multiple microphones, list them:
+python -c "import sounddevice as sd; print(sd.query_devices())"
+
+Then set the device index in config.py:
+STT_DEVICE_INDEX = 2  # Replace with your USB mic index
+
+
+📝 CONFIGURATION
+--------------------------------------------------------------------------------
+
+Edit config.py to customize STT settings:
+
+# Enable/disable STT
+STT_ENABLED = True
+
+# Model path (relative or absolute)
+STT_MODEL_PATH = "vosk-model-en-us-0.22"
+
+# Wake word to activate commands
+STT_WAKE_WORD = "hey ruby"
+
+# Seconds to record command after wake word
+STT_COMMAND_TIMEOUT = 5
+
+# Audio sample rate (16kHz is standard)
+STT_SAMPLE_RATE = 16000
+
+# Audio device index (None = default)
+STT_DEVICE_INDEX = None
+
+
+🚀 USAGE
+--------------------------------------------------------------------------------
+
+1. Start the API:
+   python main.py
+
+   You should see:
+   🎤 Speech-to-Text initialized
+   👂 Listening for wake word: 'hey ruby'
+
+2. Test microphone:
+   curl http://localhost:8000/stt/status
+   curl http://localhost:8000/stt/devices
+
+3. Test recording and transcription:
+   curl -X POST http://localhost:8000/stt/test -H "Content-Type: application/json" -d '{"duration": 5}'
+
+4. Say "Hey Ruby" followed by a command:
+   - "Hey Ruby, remind me to take medicine"
+   - "Hey Ruby, what's on my schedule today"
+   - "Hey Ruby, turn on the light"
+
+
+📡 API ENDPOINTS
+--------------------------------------------------------------------------------
+
+GET /stt/status
+  - Get STT service status
+  - Returns: initialization, listening state, wake word
+
+GET /stt/devices
+  - List all available audio input devices
+  - Returns: device index, name, channels, sample rate
+
+POST /stt/test
+  - Test recording and transcription
+  - Body: {"duration": 5}
+  - Returns: transcribed text
+
+POST /stt/start
+  - Start continuous wake word detection
+  - Returns: service status
+
+POST /stt/stop
+  - Stop continuous wake word detection
+  - Returns: service status
+
+POST /stt/command (COMING SOON)
+  - Process command with OpenAI LLM
+  - Returns: intelligent response
+
+
+🔬 TESTING
+--------------------------------------------------------------------------------
+
+Test 1: Check Status
+--------------------
+curl http://localhost:8000/stt/status
+
+Expected:
+{
+  "status": "available",
+  "initialized": true,
+  "running": true,
+  "listening": true,
+  "wake_word": "hey ruby"
+}
+
+
+Test 2: List Audio Devices
+---------------------------
+curl http://localhost:8000/stt/devices
+
+Expected:
+{
+  "status": "success",
+  "count": 3,
+  "devices": [
+    {
+      "index": 0,
+      "name": "MacBook Pro Microphone",
+      "channels": 1,
+      "sample_rate": 48000.0
+    },
+    {
+      "index": 2,
+      "name": "USB Microphone",
+      "channels": 1,
+      "sample_rate": 16000.0
+    }
+  ]
+}
+
+
+Test 3: Test Recording
+-----------------------
+Speak clearly for 5 seconds after running this command:
+
+curl -X POST http://localhost:8000/stt/test \
+  -H "Content-Type: application/json" \
+  -d '{"duration": 5}'
+
+Expected:
+{
+  "status": "success",
+  "transcribed_text": "hello this is a test",
+  "duration": 5
+}
+
+
+Test 4: Wake Word Detection
+----------------------------
+1. Say "Hey Ruby"
+2. Wait for confirmation in console:
+   🔔 WAKE WORD DETECTED!
+3. Say your command within 5 seconds
+4. Check console for transcribed command:
+   ✅ Command transcribed: 'remind me to take medicine'
+
+
+🐛 TROUBLESHOOTING
+--------------------------------------------------------------------------------
+
+❌ "STT service not initialized"
+  → Download Vosk model and place in correct directory
+  → Check STT_MODEL_PATH in config.py
+  → Verify model directory contains am/, graph/, etc.
+
+❌ "No audio devices found"
+  → Install portaudio19-dev: sudo apt-get install portaudio19-dev
+  → Connect USB microphone
+  → Run: python -c "import sounddevice as sd; print(sd.query_devices())"
+
+❌ "Audio input/output error"
+  → Check microphone permissions (Settings → Privacy → Microphone on Mac)
+  → Try different device index in config.py
+  → Test with: arecord -l (Linux) or system_profiler SPAudioDataType (Mac)
+
+❌ Wake word not detected
+  → Speak clearly and louder
+  → Reduce background noise
+  → Try alternative wake words: "okay ruby", "hello ruby"
+  → Check microphone volume: alsamixer (Linux)
+
+❌ Commands cut off or incomplete
+  → Increase STT_COMMAND_TIMEOUT in config.py (default: 5 seconds)
+  → Speak immediately after wake word confirmation
+
+❌ Poor transcription accuracy
+  → Download larger Vosk model (vosk-model-en-us-0.22, 1.8GB)
+  → Speak more clearly and at moderate pace
+  → Reduce background noise
+  → Consider upgrading to online STT (Google Speech API, Whisper)
+
+
+🔮 FUTURE ENHANCEMENTS
+--------------------------------------------------------------------------------
+
+✅ Wake word detection (DONE)
+✅ Command transcription (DONE)
+⏳ OpenAI LLM integration (NEXT)
+⏳ Custom wake word training
+⏳ Multi-language support
+⏳ Online fallback (Whisper, Google Speech)
+⏳ Voice command handler (add reminders, control devices)
+⏳ Conversational AI (dialog flow)
+
+
+📚 RESOURCES
+--------------------------------------------------------------------------------
+
+Vosk Models:
+  https://alphacephei.com/vosk/models
+
+Vosk Documentation:
+  https://alphacephei.com/vosk/
+
+SoundDevice Documentation:
+  https://python-sounddevice.readthedocs.io/
+
+OpenAI Whisper (Alternative):
+  https://github.com/openai/whisper
+
+
+================================================================================
+
