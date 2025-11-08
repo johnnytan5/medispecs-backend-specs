@@ -154,7 +154,23 @@ if 'sounddevice' not in missing_packages:
             print(f"   ✅ Found {len(input_devices)} input device(s):")
             for i, device in enumerate(devices):
                 if device['max_input_channels'] > 0:
-                    print(f"      [{i}] {device['name']}")
+                    default_marker = ""
+                    
+                    # Check if this is the default device
+                    try:
+                        if hasattr(sd.default.device, 'input'):
+                            default_idx = sd.default.device.input
+                        elif isinstance(sd.default.device, tuple):
+                            default_idx = sd.default.device[0]
+                        else:
+                            default_idx = sd.default.device
+                        
+                        if i == default_idx:
+                            default_marker = " ⭐ DEFAULT"
+                    except:
+                        pass
+                    
+                    print(f"      [{i}] {device['name']}{default_marker}")
                     print(f"          Channels: {device['max_input_channels']}, Sample Rate: {device['default_samplerate']}")
         else:
             print("   ⚠️  No input devices found")

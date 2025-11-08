@@ -79,9 +79,25 @@ class STTService:
             
             # Test audio device
             devices = sd.query_devices()
-            current_device = sd.default.device[0] if isinstance(sd.default.device, tuple) else sd.default.device
-            device_info = devices[current_device]
-            print(f"   Microphone: {device_info['name']}")
+            
+            # Handle different return types from sd.default.device
+            # Can be: int, tuple, or _InputOutputPair object
+            try:
+                if hasattr(sd.default.device, 'input'):
+                    # It's an _InputOutputPair object (input, output)
+                    current_device = sd.default.device.input
+                elif isinstance(sd.default.device, tuple):
+                    # It's a tuple (input_device, output_device)
+                    current_device = sd.default.device[0]
+                else:
+                    # It's an integer (device index)
+                    current_device = sd.default.device
+                
+                device_info = devices[current_device]
+                print(f"   Microphone: {device_info['name']}")
+            except Exception as e:
+                print(f"   Microphone: Default (could not get name: {e})")
+            
             print(f"   Sample rate: {self.sample_rate} Hz")
             
             print("✅ Speech-to-Text initialized successfully")
