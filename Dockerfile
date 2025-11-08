@@ -32,8 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies (with increased timeout for large packages like ultralytics)
+RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
 
 # Copy application code
 COPY . .
