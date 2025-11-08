@@ -6,12 +6,19 @@ import os
 from pathlib import Path
 
 # Determine data directory (Docker vs local)
-if os.path.exists("/.dockerenv") or os.getcwd() == "/app":
+# Check multiple indicators for Docker environment
+is_docker = (
+    os.path.exists("/.dockerenv") or  # Docker creates this file
+    os.getenv("DOCKER_CONTAINER") == "true" or  # We set this in docker-compose
+    Path("/app").exists() and os.access("/app", os.W_OK)  # /app exists and writable
+)
+
+if is_docker:
     # Running in Docker
     data_dir = Path("/app/data")
 else:
-    # Running locally
-    data_dir = Path("./data")
+    # Running locally - use current directory
+    data_dir = Path(__file__).parent / "data"
 
 # Ensure data directory exists
 data_dir.mkdir(parents=True, exist_ok=True)
@@ -19,6 +26,10 @@ data_dir.mkdir(parents=True, exist_ok=True)
 # SQLite database URL (use absolute path)
 db_path = data_dir.absolute() / "reminders.db"
 SQLALCHEMY_DATABASE_URL = f"sqlite+aiosqlite:///{db_path}"
+
+# Debug: Print database location
+print(f"📁 Database location: {db_path}")
+print(f"   Running in Docker: {is_docker}")
 
 # Create async engine
 engine = create_async_engine(

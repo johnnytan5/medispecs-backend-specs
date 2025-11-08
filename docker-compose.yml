@@ -12,6 +12,7 @@ services:
       - DEBUG=True
       - HOST=0.0.0.0
       - PORT=8000
+      - DOCKER_CONTAINER=true  # Flag to indicate running in Docker
       - TZ=Asia/Singapore  # Set your timezone (UTC, America/New_York, Europe/London, etc.)
     env_file:
       - .env
