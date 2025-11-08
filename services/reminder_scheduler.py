@@ -100,30 +100,12 @@ class ReminderScheduler:
                 if self._is_reminder_due(reminder, current_time, current_day):
                     print(f"🔔 Reminder due: {reminder.title} (ID: {reminder.reminder_id})")
                     
-                    # Display on OLED
-                    try:
-                        from services.oled_display import get_oled_service
-                        oled = get_oled_service()
-                        
-                        # Format message for display
-                        display_message = reminder.title.upper()
-                        if reminder.time_of_day:
-                            display_message = f"{reminder.time_of_day} {display_message}"
-                        
-                        # Print what's being displayed on OLED
-                        print(f"// OLED// {display_message} //OLED//")
-                        
-                        # Display on OLED with blinking
-                        oled.display_reminder(
-                            message=display_message,
-                            font_size=14,
-                            should_blink=True,
-                            display_time=10
-                        )
-                    except Exception as e:
-                        print(f"❌ Error displaying reminder on OLED: {e}")
+                    # Format message for display
+                    display_message = reminder.title.upper()
+                    if reminder.time_of_day:
+                        display_message = f"{reminder.time_of_day} {display_message}"
                     
-                    # Speak reminder (voice output)
+                    # Speak reminder FIRST (immediate, no delay!)
                     try:
                         from services.tts_service import get_tts_service
                         from config import TTS_ENABLED, TTS_SPEAK_REMINDERS
@@ -135,6 +117,29 @@ class ReminderScheduler:
                                 await tts.speak_async(reminder.title)
                     except Exception as e:
                         print(f"❌ Error speaking reminder: {e}")
+                    
+                    # Display on OLED (fire-and-forget, runs in background for 10s)
+                    try:
+                        from services.oled_display import get_oled_service
+                        import asyncio
+                        
+                        oled = get_oled_service()
+                        
+                        # Print what's being displayed on OLED
+                        print(f"// OLED// {display_message} //OLED//")
+                        
+                        # Run OLED display in background (doesn't block)
+                        asyncio.create_task(
+                            asyncio.to_thread(
+                                oled.display_reminder,
+                                message=display_message,
+                                font_size=14,
+                                should_blink=True,
+                                display_time=10
+                            )
+                        )
+                    except Exception as e:
+                        print(f"❌ Error displaying reminder on OLED: {e}")
                     
                     # Additional actions can be added here:
                     # - Send push notification

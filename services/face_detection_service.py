@@ -350,27 +350,13 @@ class FaceDetectionService:
                 print(f"   Confidence: {similarity:.1f}%")
                 print("="*60 + "\n")
                 
-                # Display on OLED
-                try:
-                    oled = get_oled_service()
-                    
-                    # Format message for OLED display: "Johnny (Son)"
-                    if relationship:
-                        display_message = f"{name} ({relationship})"
-                    else:
-                        display_message = name
-                    
-                    # Use smart display dispatcher (automatically chooses single-line, wrapped, or scrolling)
-                    oled.display_reminder(
-                        message=display_message,
-                        font_size=14,
-                        should_blink=True,
-                        display_time=10
-                    )
-                except Exception as e:
-                    print(f"⚠️  Could not display on OLED: {e}")
+                # Format message for OLED display: "Johnny (Son)"
+                if relationship:
+                    display_message = f"{name} ({relationship})"
+                else:
+                    display_message = name
                 
-                # Speak greeting (voice output)
+                # Speak greeting FIRST (immediate, no delay!)
                 try:
                     from services.tts_service import get_tts_service
                     from config import TTS_ENABLED, TTS_SPEAK_FACE_GREETINGS
@@ -383,6 +369,23 @@ class FaceDetectionService:
                             await tts.speak_async(greeting)
                 except Exception as e:
                     print(f"⚠️  Could not speak greeting: {e}")
+                
+                # Display on OLED (fire-and-forget, runs in background for 10s)
+                try:
+                    oled = get_oled_service()
+                    
+                    # Run OLED display in background (doesn't block)
+                    asyncio.create_task(
+                        asyncio.to_thread(
+                            oled.display_reminder,
+                            message=display_message,
+                            font_size=14,
+                            should_blink=True,
+                            display_time=10
+                        )
+                    )
+                except Exception as e:
+                    print(f"⚠️  Could not display on OLED: {e}")
             
             else:
                 # No match - stay silent as requested
