@@ -28,7 +28,7 @@ GND          →  GND (Pin 6, 9, 14, 20, 25, 30, 34, or 39)
 SCL          →  GPIO 3 (SCL, Pin 5)
 SDA          →  GPIO 2 (SDA, Pin 3)
 
-Note: Your MPU6050 is configured to use I2C address 0x77 (verify with i2cdetect)
+Note: Your MPU6050 is configured to use I2C address 0x3c (verify with i2cdetect)
 
 ENABLE I2C ON RASPBERRY PI:
 ----------------------------

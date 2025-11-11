@@ -107,7 +107,7 @@ TIMELAPSE_DEVICE_ID: Final[str] = os.getenv("DEVICE_ID", "medispecs_pi_001")  # 
 # Accelerometer Fall Detection Configuration (MPU6050)
 # ============================================================================
 ACCELEROMETER_ENABLED: Final[bool] = True  # Enable fall detection
-ACCELEROMETER_I2C_ADDRESS: Final[int] = 0x77  # MPU6050 I2C address
+ACCELEROMETER_I2C_ADDRESS: Final[int] = 0x3c  # MPU6050 I2C address
 ACCELEROMETER_SAMPLING_RATE: Final[int] = 50  # Sampling frequency in Hz (50Hz = 20ms interval)
 
 # Fall Detection Algorithm Thresholds
