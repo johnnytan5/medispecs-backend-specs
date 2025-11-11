@@ -348,12 +348,12 @@ class AccelerometerService:
             'simulated': True
         }
         
-        # Trigger callback
-        if self.on_fall_detected:
-            await self.on_fall_detected(self.latest_fall_event)
-        
         # Enter cooldown state
         self._transition_to_state(FallDetectionState.INACTIVITY)
+        
+        # Trigger callback in background (don't await - it takes 15+ seconds)
+        if self.on_fall_detected:
+            asyncio.create_task(self.on_fall_detected(self.latest_fall_event))
 
 
 # Singleton accessor

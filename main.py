@@ -192,55 +192,68 @@ async def lifespan(app: FastAPI):
                 4. Listen for "okay" confirmation
                 5. Acknowledge fall based on response
                 """
-                print(f"\n{'='*60}")
-                print(f"🚨 FALL DETECTED!")
-                print(f"{'='*60}")
-                
-                # 1. Cut off timelapse video (if recording)
-                if timelapse_service and timelapse_service.is_running:
-                    video_id = await timelapse_service.trigger_fall_cutoff()
-                    if video_id:
-                        print(f"📹 Fall video segment saved: {video_id}")
-                
-                # 2. Play TTS alert + 3. Show OLED message (simultaneously)
-                from services.tts_service import get_tts_service
-                from services.oled_display import get_oled_service
-                
-                tts = get_tts_service()
-                oled = get_oled_service()
-                
-                # Fire and forget for TTS and OLED (simultaneous)
-                tts_task = asyncio.create_task(tts.speak(config.FALL_TTS_ALERT))
-                oled_task = asyncio.create_task(oled.show_message(config.FALL_OLED_MESSAGE))
-                
-                # Wait for both to complete (TTS might take longer)
-                await asyncio.gather(tts_task, oled_task)
-                
-                # 4. Listen for "okay" confirmation (if STT is available)
-                user_confirmed = False
-                response_text = None
-                
-                if stt_service and stt_service.is_running:
-                    print(f"👂 Waiting for user confirmation...")
-                    user_confirmed, response_text = await stt_service.listen_for_fall_confirmation(
-                        timeout=config.FALL_CONFIRMATION_TIMEOUT,
-                        keyword=config.FALL_CONFIRMATION_KEYWORD
-                    )
+                try:
+                    print(f"\n{'='*60}")
+                    print(f"🚨 FALL DETECTED!")
+                    print(f"{'='*60}")
                     
-                    if user_confirmed:
-                        print(f"✅ User confirmed: '{response_text}'")
-                        # Speak positive response
-                        await tts.speak("Glad you're okay!")
+                    # 1. Cut off timelapse video (if recording)
+                    if timelapse_service and timelapse_service.is_running:
+                        video_id = await timelapse_service.trigger_fall_cutoff()
+                        if video_id:
+                            print(f"📹 Fall video segment saved: {video_id}")
+                    
+                    # 2. Play TTS alert + 3. Show OLED message (simultaneously)
+                    from services.tts_service import get_tts_service
+                    from services.oled_display import get_oled_service
+                    
+                    tts = get_tts_service()
+                    oled = get_oled_service()
+                    
+                    # Fire and forget for TTS and OLED (simultaneous)
+                    tts_task = asyncio.create_task(tts.speak(config.FALL_TTS_ALERT))
+                    oled_task = asyncio.create_task(oled.show_message(config.FALL_OLED_MESSAGE))
+                    
+                    # Wait for both to complete (TTS might take longer)
+                    await asyncio.gather(tts_task, oled_task)
+                    
+                    # 4. Listen for "okay" confirmation (if STT is available)
+                    user_confirmed = False
+                    response_text = None
+                    
+                    if stt_service and stt_service.is_running:
+                        print(f"👂 Waiting for user confirmation...")
+                        user_confirmed, response_text = await stt_service.listen_for_fall_confirmation(
+                            timeout=config.FALL_CONFIRMATION_TIMEOUT,
+                            keyword=config.FALL_CONFIRMATION_KEYWORD
+                        )
+                        
+                        if user_confirmed:
+                            print(f"✅ User confirmed: '{response_text}'")
+                            # Speak positive response
+                            await tts.speak("Glad you're okay!")
+                        else:
+                            print(f"⚠️  No confirmation received (timeout)")
+                            # Emergency alert will be visible in /accelerometer/emergency/status endpoint
                     else:
-                        print(f"⚠️  No confirmation received (timeout)")
-                        # Emergency alert will be visible in /accelerometer/emergency/status endpoint
-                else:
-                    print(f"⚠️  STT not available, cannot listen for confirmation")
+                        print(f"⚠️  STT not available, cannot listen for confirmation")
+                    
+                    # 5. Acknowledge fall in accelerometer service
+                    accelerometer_service.acknowledge_fall(user_confirmed, response_text)
+                    
+                    print(f"{'='*60}\n")
                 
-                # 5. Acknowledge fall in accelerometer service
-                accelerometer_service.acknowledge_fall(user_confirmed, response_text)
-                
-                print(f"{'='*60}\n")
+                except Exception as e:
+                    print(f"\n❌ ERROR in fall detection callback: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print(f"{'='*60}\n")
+                    
+                    # Still acknowledge the fall even if callback fails
+                    try:
+                        accelerometer_service.acknowledge_fall(False, None)
+                    except:
+                        pass
             
             # Set the callback
             accelerometer_service.on_fall_detected = on_fall_detected
