@@ -117,7 +117,7 @@ FALL_INACTIVITY_DURATION: Final[float] = 5.0  # Inactivity duration in seconds a
 FALL_COOLDOWN_PERIOD: Final[int] = 20  # Cooldown period in seconds between fall detections
 
 # Fall Response Configuration
-FALL_CONFIRMATION_TIMEOUT: Final[int] = 30  # Seconds to wait for user's "okay" voice confirmation
+FALL_CONFIRMATION_TIMEOUT: Final[int] = 15  # Seconds to wait for user's "okay" voice confirmation
 FALL_CONFIRMATION_KEYWORD: Final[str] = "okay"  # Keyword to search in user's response (case-insensitive)
 FALL_TTS_ALERT: Final[str] = "Fall detected! Are you okay? Please say okay"  # TTS message on fall
 FALL_OLED_MESSAGE: Final[str] = "Fall Alert\nSpeak Up!"  # OLED message on fall

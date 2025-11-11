@@ -48,13 +48,13 @@ Expected output:
 00:          -- -- -- -- -- -- -- -- -- -- -- -- --
 10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- -- 3c -- -- -- -- --
 40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-70: -- -- -- -- -- -- -- 77
+70: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-(You should see "77" if sensor is connected correctly)
+(You should see "3c" if sensor is connected correctly)
 
 ================================================================================
 SOFTWARE INSTALLATION
@@ -89,7 +89,7 @@ The fall detection settings are already configured in config.py:
 ACCELEROMETER_ENABLED = True  # Set to False to disable
 
 # Hardware Settings
-ACCELEROMETER_I2C_ADDRESS = 0x77  # Your MPU6050 address
+ACCELEROMETER_I2C_ADDRESS = 0x3c  # Your MPU6050 address
 ACCELEROMETER_SAMPLING_RATE = 50  # Hz (50Hz = 20ms sampling interval)
 
 # Fall Detection Thresholds
@@ -99,7 +99,7 @@ FALL_INACTIVITY_DURATION = 5.0  # Seconds of inactivity after impact
 FALL_COOLDOWN_PERIOD = 20       # Seconds between fall detections
 
 # User Response Settings
-FALL_CONFIRMATION_TIMEOUT = 30  # Seconds to wait for "okay"
+FALL_CONFIRMATION_TIMEOUT = 15  # Seconds to wait for "okay"
 FALL_CONFIRMATION_KEYWORD = "okay"  # Keyword to detect (case-insensitive)
 FALL_TTS_ALERT = "Fall detected! Are you okay? Please say okay"
 FALL_OLED_MESSAGE = "Fall Alert\nSpeak Up!"
@@ -131,7 +131,7 @@ Expected console output:
     🚀 Starting MediSpecs API...
     ✅ Database initialized successfully
     ...
-    🔧 Initializing MPU6050 at I2C address 0x77...
+    🔧 Initializing MPU6050 at I2C address 0x3c...
     ✅ MPU6050 initialized successfully
        Test reading: X=0.12 Y=-0.05 Z=9.78 m/s²
     👂 Fall detection started (sampling at 50Hz)
@@ -299,8 +299,8 @@ PROBLEM: MPU6050 initialization failed
 SOLUTION: 
 - Check wiring (VCC, GND, SDA, SCL)
 - Verify I2C is enabled: sudo raspi-config
-- Check I2C address: i2cdetect -y 1 (should show 0x77)
-- Try different I2C address if needed (0x68 is common alternative)
+- Check I2C address: i2cdetect -y 1 (should show 0x3c)
+- Try different I2C address if needed (0x68, 0x69 are common alternatives)
 
 PROBLEM: Too many false positives
 SOLUTION:

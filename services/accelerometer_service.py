@@ -76,6 +76,10 @@ class AccelerometerService:
         self.current_accel = {'x': 0.0, 'y': 0.0, 'z': 0.0}
         self.current_total_accel = 1.0  # Start at 1G (resting)
         
+        # Debug logging
+        self.last_log_time = 0.0  # Track last time we printed debug info
+        self.log_interval = 2.0  # Print every 2 seconds
+        
         # Emergency status (for polling endpoint)
         self.latest_fall_event: Optional[Dict[str, Any]] = None
         self.fall_acknowledged = False
@@ -138,10 +142,12 @@ class AccelerometerService:
         self.is_running = True
         self.state = FallDetectionState.IDLE
         self.state_start_time = time.time()
+        self.last_log_time = 0.0  # Set to 0 to log immediately on first loop
         
         # Start monitoring task
         self.monitoring_task = asyncio.create_task(self._monitor_continuously())
         print(f"👂 Fall detection started (sampling at {self.sampling_rate}Hz)")
+        print(f"📊 Debug logging enabled (printing acceleration values every {self.log_interval}s)")
     
     async def stop(self):
         """Stop fall detection monitoring"""
@@ -184,6 +190,12 @@ class AccelerometerService:
                     self.current_accel['y']**2 + 
                     self.current_accel['z']**2
                 )
+                
+                # Debug logging every 2 seconds
+                current_time = time.time()
+                if current_time - self.last_log_time >= self.log_interval:
+                    print(f"📊 Accel: X={self.current_accel['x']:+.2f}G  Y={self.current_accel['y']:+.2f}G  Z={self.current_accel['z']:+.2f}G  │ A_sum={self.current_total_accel:.2f}G  │ State: {self.state.value}")
+                    self.last_log_time = current_time
                 
                 # Run state machine
                 await self._process_fall_detection()
