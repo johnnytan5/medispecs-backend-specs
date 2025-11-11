@@ -109,7 +109,7 @@ class TimelapseService:
     
     def _init_database(self):
         """Initialize SQLite database with schema"""
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -314,11 +314,11 @@ class TimelapseService:
             file_size = output_path.stat().st_size
             
             # Store in database
-            conn = sqlite3.connect(str(self.db_path))
+            conn = sqlite3.connect(str(self.db_path), timeout=10.0)
             cursor = conn.cursor()
             
             cursor.execute('''
-                INSERT INTO videos (
+                INSERT OR IGNORE INTO videos (
                     video_id, local_path, file_size_bytes, duration_sec,
                     frame_count, recorded_at, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -380,7 +380,7 @@ class TimelapseService:
                 return
             
             # Get video from database
-            conn = sqlite3.connect(str(self.db_path))
+            conn = sqlite3.connect(str(self.db_path), timeout=10.0)
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM videos WHERE video_id = ?', (video_id,))
             row = cursor.fetchone()
@@ -461,10 +461,14 @@ class TimelapseService:
             )
             
             if upload_url_response.status_code != 200:
-                raise Exception(f"Upload URL request failed: {upload_url_response.status_code}")
+                raise Exception(f"Upload URL request failed: {upload_url_response.status_code} - {upload_url_response.text}")
             
             upload_data = upload_url_response.json()
+            print(f"   📋 Lambda response: {upload_data}")  # DEBUG
             upload_url = upload_data.get('uploadUrl')
+            
+            if not upload_url:
+                raise Exception(f"No uploadUrl in response. Got keys: {list(upload_data.keys())}")
             
             # Step 3: Upload video to S3
             print(f"   Step 3: Uploading to S3... ({video_data['file_size_bytes']/1024/1024:.1f} MB)")
@@ -493,7 +497,7 @@ class TimelapseService:
     
     def _update_upload_success(self, video_id: str, s3_key: str):
         """Update database after successful upload"""
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -511,7 +515,7 @@ class TimelapseService:
     
     def _update_upload_failure(self, video_id: str, error_message: str):
         """Update database after upload failure"""
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -550,7 +554,7 @@ class TimelapseService:
         from config import TIMELAPSE_UPLOAD_MAX_ATTEMPTS, USER_ID, TIMELAPSE_DEVICE_ID
         
         # Get failed videos
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -614,7 +618,7 @@ class TimelapseService:
         cutoff_time = datetime.now() - timedelta(hours=self.max_age_hours)
         
         # Get old uploaded videos
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -678,7 +682,7 @@ class TimelapseService:
         
         # Get database stats
         if self.db_path and Path(self.db_path).exists():
-            conn = sqlite3.connect(str(self.db_path))
+            conn = sqlite3.connect(str(self.db_path), timeout=10.0)
             cursor = conn.cursor()
             
             # Total videos

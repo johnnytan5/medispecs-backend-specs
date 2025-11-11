@@ -91,8 +91,26 @@ curl -X POST http://localhost:8000/timelapse/start
 # Stop recording
 curl -X POST http://localhost:8000/timelapse/stop
 
+# Force complete current segment (manual cutoff)
+curl -X POST http://localhost:8000/timelapse/complete-segment
+
 # Check status
 curl http://localhost:8000/timelapse/status
+
+
+Manual Segment Completion Use Cases:
+-------------------------------------
+✅ Testing - Create video immediately without waiting 15 minutes
+✅ Important moments - Capture specific events right away
+✅ Quick review - Generate video on demand for immediate playback
+✅ Debugging - Test upload pipeline without long wait
+
+Example workflow:
+1. Start server (recording starts automatically)
+2. Wait 30 seconds (capture ~15 frames)
+3. curl -X POST http://localhost:8000/timelapse/complete-segment
+4. Video created immediately with 15 frames (~0.5 second at 30 FPS)
+5. New segment starts automatically
 
 
 📡 API ENDPOINTS
