@@ -95,6 +95,61 @@ async def stop_recording():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/complete-segment")
+async def complete_current_segment():
+    """
+    Manually complete the current video segment
+    
+    Forces the current segment to finish and create a video,
+    even if it hasn't reached the full 450 frames yet.
+    
+    Useful for:
+    - Testing without waiting 15 minutes
+    - Creating segments at specific moments
+    - Ending a segment early if needed
+    """
+    try:
+        from services.timelapse_service import get_timelapse_service
+        
+        timelapse = get_timelapse_service()
+        
+        if not timelapse.is_recording:
+            return {
+                "status": "not_recording",
+                "message": "Timelapse is not recording"
+            }
+        
+        if not timelapse.current_segment_id:
+            return {
+                "status": "no_segment",
+                "message": "No active segment to complete"
+            }
+        
+        # Check if there are frames to save
+        if timelapse.frames_captured == 0:
+            return {
+                "status": "no_frames",
+                "message": "No frames captured yet in current segment"
+            }
+        
+        segment_id = timelapse.current_segment_id
+        frames_captured = timelapse.frames_captured
+        
+        # Force complete the segment
+        await timelapse._complete_segment()
+        
+        return {
+            "status": "success",
+            "message": f"Segment {segment_id} completed manually",
+            "segment_id": segment_id,
+            "frames_captured": frames_captured,
+            "note": "Video created with available frames, new segment started"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/videos")
 async def list_videos():
     """

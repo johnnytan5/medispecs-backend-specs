@@ -102,6 +102,7 @@ Control:
 --------
 POST /timelapse/start         # Start recording
 POST /timelapse/stop          # Stop recording
+POST /timelapse/complete-segment  # Force complete current segment (manual cutoff)
 GET  /timelapse/status        # Service status & progress
 
 Videos:
@@ -173,7 +174,25 @@ Expected:
 }
 
 
-Test 3: Watch Video
+Test 3: Manual Segment Completion
+----------------------------------
+# Force complete current segment (useful for testing)
+curl -X POST http://localhost:8000/timelapse/complete-segment
+
+Expected:
+{
+  "status": "success",
+  "message": "Segment 20250115T140000123456 completed manually",
+  "segment_id": "20250115T140000123456",
+  "frames_captured": 45,
+  "note": "Video created with available frames, new segment started"
+}
+
+Note: Video will be created with however many frames were captured
+(e.g., 45 frames instead of 450), so it will be shorter.
+
+
+Test 4: Watch Video
 -------------------
 Open in browser:
 http://localhost:8000/timelapse/videos/20250115T140000123456/stream
