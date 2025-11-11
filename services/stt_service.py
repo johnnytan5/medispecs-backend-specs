@@ -472,6 +472,99 @@ class STTService:
         
         return full_command
     
+    async def listen_for_fall_confirmation(self, timeout: int = 30, keyword: str = "okay") -> tuple[bool, Optional[str]]:
+        """
+        Special listening mode for fall detection confirmation
+        
+        Listens for the confirmation keyword (e.g., "okay") WITHOUT requiring wake word.
+        Used after fall detection to check if user is okay.
+        
+        Args:
+            timeout: Maximum seconds to listen for confirmation
+            keyword: Keyword to search for in transcription (case-insensitive)
+        
+        Returns:
+            Tuple of (confirmed, transcribed_text)
+            - confirmed: True if keyword found in transcription
+            - transcribed_text: Full text that was transcribed (or None if silence)
+        """
+        print(f"👂 Listening for fall confirmation (keyword: '{keyword}', timeout: {timeout}s)...")
+        
+        # Clear recognizer state
+        self.recognizer = None
+        from vosk import KaldiRecognizer
+        self.recognizer = KaldiRecognizer(self.model, self.sample_rate)
+        
+        # Clear audio queue
+        while not self.audio_queue.empty():
+            try:
+                self.audio_queue.get_nowait()
+            except:
+                break
+        
+        # Listen for timeout duration
+        start_time = time.time()
+        transcribed_parts = []
+        
+        print(f"   (Listening for '{keyword}'...)")
+        
+        while time.time() - start_time < timeout:
+            try:
+                data = self.audio_queue.get(timeout=0.5)
+                
+                # Get partial results for real-time feedback
+                partial_result = json.loads(self.recognizer.PartialResult())
+                partial_text = partial_result.get('partial', '').lower()
+                
+                # Check if keyword is in partial result (early exit)
+                if keyword.lower() in partial_text:
+                    print(f"   ✅ Keyword '{keyword}' detected early!")
+                    transcribed_parts.append(partial_text)
+                    
+                    # Get final result
+                    final_result = json.loads(self.recognizer.FinalResult())
+                    final_text = final_result.get('text', '').strip()
+                    if final_text:
+                        transcribed_parts.append(final_text)
+                    
+                    full_text = ' '.join(transcribed_parts).strip()
+                    print(f"   💬 Transcribed: '{full_text}'")
+                    return (True, full_text)
+                
+                if self.recognizer.AcceptWaveform(data):
+                    result = json.loads(self.recognizer.Result())
+                    text = result.get('text', '').strip()
+                    if text:
+                        transcribed_parts.append(text)
+                        
+                        # Check if keyword is in transcribed text
+                        if keyword.lower() in text.lower():
+                            full_text = ' '.join(transcribed_parts).strip()
+                            print(f"   ✅ Keyword '{keyword}' found in: '{full_text}'")
+                            return (True, full_text)
+                
+                await asyncio.sleep(0.01)
+                
+            except queue.Empty:
+                continue
+        
+        # Timeout - get final result
+        final_result = json.loads(self.recognizer.FinalResult())
+        final_text = final_result.get('text', '').strip()
+        if final_text:
+            transcribed_parts.append(final_text)
+        
+        full_text = ' '.join(transcribed_parts).strip()
+        
+        if full_text:
+            # Check one more time if keyword is present
+            confirmed = keyword.lower() in full_text.lower()
+            print(f"   {'✅' if confirmed else '❌'} Timeout - Transcribed: '{full_text}'")
+            return (confirmed, full_text)
+        else:
+            print(f"   ⏱️ Timeout - No speech detected")
+            return (False, None)
+    
     async def test_listen(self, duration: int = 5) -> str:
         """
         Test function - manually record and transcribe audio

@@ -103,3 +103,23 @@ TIMELAPSE_UPLOAD_RETRY_INTERVAL: Final[int] = 3600  # Background retry every 1 h
 TIMELAPSE_UPLOAD_MAX_ATTEMPTS: Final[int] = 24  # Max retry attempts (24 hours of hourly retries)
 TIMELAPSE_DEVICE_ID: Final[str] = os.getenv("DEVICE_ID", "medispecs_pi_001")  # Device identifier
 
+# ============================================================================
+# Accelerometer Fall Detection Configuration (MPU6050)
+# ============================================================================
+ACCELEROMETER_ENABLED: Final[bool] = True  # Enable fall detection
+ACCELEROMETER_I2C_ADDRESS: Final[int] = 0x77  # MPU6050 I2C address
+ACCELEROMETER_SAMPLING_RATE: Final[int] = 50  # Sampling frequency in Hz (50Hz = 20ms interval)
+
+# Fall Detection Algorithm Thresholds
+FALL_FREE_FALL_THRESHOLD: Final[float] = 0.4  # Free fall detection: total acceleration < 0.4G
+FALL_IMPACT_THRESHOLD: Final[float] = 2.3  # Impact detection: total acceleration > 2.3G (slightly easier than 2.5G)
+FALL_INACTIVITY_DURATION: Final[float] = 5.0  # Inactivity duration in seconds after impact
+FALL_COOLDOWN_PERIOD: Final[int] = 20  # Cooldown period in seconds between fall detections
+
+# Fall Response Configuration
+FALL_CONFIRMATION_TIMEOUT: Final[int] = 30  # Seconds to wait for user's "okay" voice confirmation
+FALL_CONFIRMATION_KEYWORD: Final[str] = "okay"  # Keyword to search in user's response (case-insensitive)
+FALL_TTS_ALERT: Final[str] = "Fall detected! Are you okay? Please say okay"  # TTS message on fall
+FALL_OLED_MESSAGE: Final[str] = "Fall Alert\nSpeak Up!"  # OLED message on fall
+FALL_VIDEO_PREFIX: Final[str] = "FALL_"  # Prefix for fall-triggered timelapse segments
+

@@ -1,0 +1,396 @@
+================================================================================
+MEDISPECS FALL DETECTION SETUP GUIDE
+MPU6050 Accelerometer - Senior Citizen Safety Feature
+================================================================================
+
+OVERVIEW:
+---------
+The fall detection system uses an MPU6050 accelerometer/gyroscope sensor to
+detect falls in real-time. When a fall is detected, the system:
+1. Captures the incident on video (timelapse cutoff)
+2. Alerts the user with TTS ("Fall detected! Are you okay? Please say okay")
+3. Displays alert on OLED screen
+4. Listens for voice confirmation (user says "okay")
+5. Logs the event for caregiver monitoring via polling endpoint
+
+================================================================================
+HARDWARE SETUP
+================================================================================
+
+MPU6050 WIRING (Raspberry Pi):
+-------------------------------
+Connect the MPU6050 to Raspberry Pi via I2C:
+
+MPU6050 Pin  →  Raspberry Pi Pin
+-----------     ----------------
+VCC          →  3.3V (Pin 1 or 17)
+GND          →  GND (Pin 6, 9, 14, 20, 25, 30, 34, or 39)
+SCL          →  GPIO 3 (SCL, Pin 5)
+SDA          →  GPIO 2 (SDA, Pin 3)
+
+Note: Your MPU6050 is configured to use I2C address 0x77 (verify with i2cdetect)
+
+ENABLE I2C ON RASPBERRY PI:
+----------------------------
+1. Run: sudo raspi-config
+2. Select: Interface Options → I2C → Enable
+3. Reboot: sudo reboot
+
+VERIFY I2C CONNECTION:
+----------------------
+Install i2c-tools and check if sensor is detected:
+
+    sudo apt-get install -y i2c-tools
+    i2cdetect -y 1
+
+Expected output:
+    0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- --
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+70: -- -- -- -- -- -- -- 77
+
+(You should see "77" if sensor is connected correctly)
+
+================================================================================
+SOFTWARE INSTALLATION
+================================================================================
+
+INSTALL PYTHON DEPENDENCIES:
+-----------------------------
+From your project directory:
+
+    cd /path/to/medispecs-backend-specs
+    source venv/bin/activate  # Activate virtual environment
+    pip install -r requirements.txt
+
+This will install:
+    - mpu6050-raspberrypi==1.2  (MPU6050 sensor library)
+
+VERIFY INSTALLATION:
+--------------------
+Test that the MPU6050 library can be imported:
+
+    python3 -c "from mpu6050 import mpu6050; print('MPU6050 library OK')"
+
+================================================================================
+CONFIGURATION
+================================================================================
+
+EDIT CONFIG.PY:
+---------------
+The fall detection settings are already configured in config.py:
+
+# Enable/Disable Fall Detection
+ACCELEROMETER_ENABLED = True  # Set to False to disable
+
+# Hardware Settings
+ACCELEROMETER_I2C_ADDRESS = 0x77  # Your MPU6050 address
+ACCELEROMETER_SAMPLING_RATE = 50  # Hz (50Hz = 20ms sampling interval)
+
+# Fall Detection Thresholds
+FALL_FREE_FALL_THRESHOLD = 0.4  # Free fall: < 0.4G
+FALL_IMPACT_THRESHOLD = 2.3     # Impact: > 2.3G (easier than 2.5G)
+FALL_INACTIVITY_DURATION = 5.0  # Seconds of inactivity after impact
+FALL_COOLDOWN_PERIOD = 20       # Seconds between fall detections
+
+# User Response Settings
+FALL_CONFIRMATION_TIMEOUT = 30  # Seconds to wait for "okay"
+FALL_CONFIRMATION_KEYWORD = "okay"  # Keyword to detect (case-insensitive)
+FALL_TTS_ALERT = "Fall detected! Are you okay? Please say okay"
+FALL_OLED_MESSAGE = "Fall Alert\nSpeak Up!"
+FALL_VIDEO_PREFIX = "FALL_"  # Prefix for fall-triggered videos
+
+ADJUST THRESHOLDS (if needed):
+-------------------------------
+If you get too many false positives (false alarms):
+- Increase FALL_IMPACT_THRESHOLD (e.g., 2.5, 2.7)
+- Increase FALL_FREE_FALL_THRESHOLD (e.g., 0.5)
+
+If falls are not detected:
+- Decrease FALL_IMPACT_THRESHOLD (e.g., 2.0)
+- Decrease FALL_FREE_FALL_THRESHOLD (e.g., 0.3)
+
+================================================================================
+STARTING THE SERVICE
+================================================================================
+
+START THE API:
+--------------
+From your project directory:
+
+    cd /path/to/medispecs-backend-specs
+    python main.py
+
+Expected console output:
+
+    🚀 Starting MediSpecs API...
+    ✅ Database initialized successfully
+    ...
+    🔧 Initializing MPU6050 at I2C address 0x77...
+    ✅ MPU6050 initialized successfully
+       Test reading: X=0.12 Y=-0.05 Z=9.78 m/s²
+    👂 Fall detection started (sampling at 50Hz)
+    📊 Monitoring accelerometer (thresholds: <0.4G free fall, >2.3G impact)
+    🚨 Fall detection enabled (sampling: 50Hz)
+       Free fall: <0.4G, Impact: >2.3G
+    🎯 Service ready for user: u_123
+
+================================================================================
+API ENDPOINTS
+================================================================================
+
+EMERGENCY STATUS (for caregiver polling):
+------------------------------------------
+GET /accelerometer/emergency/status
+
+This endpoint is designed to be polled every 5 seconds by caregiver devices.
+
+Response example:
+{
+  "monitoring": true,
+  "current_state": "idle",
+  "latest_fall": {
+    "timestamp": "2025-11-11T20:15:30.123456Z",
+    "freefall_g": 0.35,
+    "impact_g": 2.8,
+    "inactivity_sec": 5.2,
+    "user_response": "NO_RESPONSE",  // or "CONFIRMED"
+    "acknowledged": true
+  },
+  "current_readings": {
+    "acceleration": { "x": 0.12, "y": -0.05, "z": 0.98, "total": 0.99 },
+    "state": "idle",
+    "time_in_state": 15.3
+  }
+}
+
+CAREGIVER INTEGRATION:
+----------------------
+Your caregiver app should poll this endpoint via ngrok:
+
+    # Setup ngrok tunnel
+    ngrok http 8000
+
+    # Poll from caregiver app (every 5 seconds)
+    curl https://YOUR-NGROK-URL.ngrok.io/accelerometer/emergency/status
+
+If latest_fall is not null and user_response is "NO_RESPONSE", 
+send an emergency alert to caregivers!
+
+OTHER ENDPOINTS:
+----------------
+GET  /accelerometer/status          - Current accelerometer status
+GET  /accelerometer/readings        - Real-time acceleration values
+POST /accelerometer/start           - Start fall detection monitoring
+POST /accelerometer/stop            - Stop fall detection monitoring
+POST /accelerometer/test-fall       - Simulate fall for testing
+POST /accelerometer/acknowledge     - Manually acknowledge fall
+
+================================================================================
+TESTING THE SYSTEM
+================================================================================
+
+TEST 1: Sensor Readings
+------------------------
+Verify the sensor is working:
+
+    curl http://localhost:8000/accelerometer/readings
+
+Expected response:
+{
+  "acceleration": { "x": 0.02, "y": -0.01, "z": 0.98, "total": 0.98 },
+  "state": "idle",
+  "time_in_state": 42.1
+}
+
+TEST 2: Simulate Fall (Software)
+---------------------------------
+Trigger a simulated fall without physical movement:
+
+    curl -X POST http://localhost:8000/accelerometer/test-fall
+
+Expected behavior:
+- Console: "🚨 FALL DETECTED!"
+- TTS: "Fall detected! Are you okay? Please say okay"
+- OLED: "Fall Alert\nSpeak Up!"
+- Waits 30 seconds for you to say "okay"
+- If no response, latest_fall.user_response = "NO_RESPONSE"
+
+TEST 3: Real Fall Detection
+----------------------------
+CAUTION: Use a soft surface (cushion, pillow, bed)!
+
+1. Hold the Raspberry Pi (with MPU6050 attached)
+2. Drop it onto a soft cushion from ~30cm height
+3. Watch console output for detection stages:
+   
+   🪂 Free fall detected! (0.32G)
+   💥 Impact detected! (3.1G)
+   🚨 FALL DETECTED! (inactivity: 5.2s)
+
+4. Say "okay" within 30 seconds
+5. System should respond: "Glad you're okay!"
+
+TEST 4: Emergency Status Polling
+---------------------------------
+After triggering a fall (simulated or real), check emergency status:
+
+    curl http://localhost:8000/accelerometer/emergency/status
+
+If you didn't say "okay", you should see:
+{
+  "latest_fall": {
+    "user_response": "NO_RESPONSE",
+    "acknowledged": true
+  }
+}
+
+================================================================================
+INTEGRATION WITH OTHER FEATURES
+================================================================================
+
+TIMELAPSE VIDEO CUTOFF:
+------------------------
+When a fall is detected, the current timelapse video segment is automatically
+cut off and saved with a "FALL_" prefix for easy identification.
+
+Example: FALL_20251111T201530123456.mp4
+
+These videos can be retrieved via:
+    GET /timelapse/videos?userId=u_123
+
+Fall videos will show up in the list with the FALL_ prefix.
+
+VOICE CONFIRMATION (STT):
+-------------------------
+After a fall, the system listens for the keyword "okay" (without requiring
+"Hey Ruby" wake word). The keyword can appear anywhere in the user's speech:
+
+Examples that work:
+- "okay"
+- "I'm okay"
+- "yeah okay"
+- "okay I'm fine"
+
+The keyword is case-insensitive and searched as a substring.
+
+CAREGIVER NOTIFICATIONS:
+------------------------
+The emergency/status endpoint provides all the information needed for
+caregivers to monitor the user remotely:
+
+- Real-time acceleration data
+- Fall detection state
+- Latest fall event with timestamps
+- User confirmation status
+
+Poll this endpoint every 5 seconds to implement real-time monitoring.
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+PROBLEM: MPU6050 initialization failed
+SOLUTION: 
+- Check wiring (VCC, GND, SDA, SCL)
+- Verify I2C is enabled: sudo raspi-config
+- Check I2C address: i2cdetect -y 1 (should show 0x77)
+- Try different I2C address if needed (0x68 is common alternative)
+
+PROBLEM: Too many false positives
+SOLUTION:
+- Increase FALL_IMPACT_THRESHOLD (e.g., 2.5 → 2.7)
+- Increase FALL_INACTIVITY_DURATION (e.g., 5.0 → 7.0)
+- Increase FALL_COOLDOWN_PERIOD (e.g., 20 → 30)
+
+PROBLEM: Falls not detected
+SOLUTION:
+- Decrease FALL_IMPACT_THRESHOLD (e.g., 2.3 → 2.0)
+- Decrease FALL_FREE_FALL_THRESHOLD (e.g., 0.4 → 0.3)
+- Test with simulated fall first: POST /accelerometer/test-fall
+
+PROBLEM: Voice confirmation not working
+SOLUTION:
+- Verify STT is running (check console for "👂 Listening for...")
+- Test STT separately: say "Hey Ruby" and check if it responds
+- Speak clearly and louder
+- Check microphone connection and permissions
+
+PROBLEM: Timelapse video not cut off on fall
+SOLUTION:
+- Verify timelapse is recording: GET /timelapse/status
+- Check console for "📹 Fall video segment saved: ..."
+- Ensure TIMELAPSE_ENABLED=True in config.py
+
+================================================================================
+PRODUCTION DEPLOYMENT
+================================================================================
+
+RECOMMENDATIONS:
+----------------
+1. Mount MPU6050 securely on smart glasses frame
+2. Test thresholds with actual user movement patterns
+3. Setup ngrok tunnel for caregiver access:
+   
+   ngrok http 8000
+   
+4. Configure caregiver app to poll /accelerometer/emergency/status every 5s
+5. Implement escalation logic in caregiver app:
+   - If user_response == "NO_RESPONSE", send SMS/push notification
+   - If user_response == "CONFIRMED", log event only
+6. Monitor battery life (50Hz sampling uses more power)
+7. Consider adjusting sampling rate if battery life is a concern
+
+SAFETY CONSIDERATIONS:
+----------------------
+- This system is a monitoring aid, not a replacement for medical care
+- False positives are better than false negatives for safety
+- Ensure backup communication method exists (phone, panic button)
+- Test regularly with user to ensure thresholds are appropriate
+- Train user on voice confirmation ("okay" after fall)
+
+================================================================================
+EXAMPLE WORKFLOW
+================================================================================
+
+1. User is wearing MediSpecs smart glasses with MPU6050
+2. User falls down
+3. System detects: Free Fall (0.35G) → Impact (2.9G) → Inactivity (5.2s)
+4. System cuts off timelapse video: FALL_20251111T153045789123.mp4
+5. TTS speaks: "Fall detected! Are you okay? Please say okay"
+6. OLED displays: "Fall Alert\nSpeak Up!"
+7. System listens for 30 seconds...
+
+SCENARIO A (User is okay):
+- User says: "okay"
+- System responds: "Glad you're okay!"
+- Fall logged with user_response="CONFIRMED"
+- Caregiver sees event in monitoring dashboard (informational only)
+
+SCENARIO B (User needs help):
+- User does not respond (unconscious, unable to speak)
+- After 30 seconds timeout
+- Fall logged with user_response="NO_RESPONSE"
+- Caregiver monitoring app polls /accelerometer/emergency/status
+- Caregiver app detects NO_RESPONSE and sends emergency alert
+- Caregiver calls 911 or checks on user
+
+================================================================================
+SUPPORT & DOCUMENTATION
+================================================================================
+
+For more information:
+- config.py: All fall detection configuration
+- services/accelerometer_service.py: Fall detection algorithm
+- routers/accelerometer.py: API endpoints
+- main.py: Service initialization and callback
+
+Console logs show detailed fall detection stages for debugging.
+
+================================================================================
+

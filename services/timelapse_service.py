@@ -234,14 +234,21 @@ class TimelapseService:
         except Exception as e:
             print(f"❌ Error in _capture_frame: {e}")
     
-    def _start_new_segment(self):
-        """Start a new video segment"""
-        self.current_segment_id = datetime.now().strftime("%Y%m%dT%H%M%S%f")
+    def _start_new_segment(self, prefix: str = ""):
+        """
+        Start a new video segment
+        
+        Args:
+            prefix: Optional prefix for video ID (e.g., "FALL_" for fall-triggered videos)
+        """
+        timestamp = datetime.now().strftime("%Y%m%dT%H%M%S%f")
+        self.current_segment_id = f"{prefix}{timestamp}"
         self.current_segment_frames = []
         self.current_segment_start_time = datetime.now()
         self.frames_captured = 0
         
-        print(f"\n📹 Starting new segment: {self.current_segment_id}")
+        segment_type = "FALL ALERT" if prefix else "regular"
+        print(f"\n📹 Starting new segment ({segment_type}): {self.current_segment_id}")
     
     async def _complete_segment(self):
         """Complete current segment and create video"""
@@ -278,6 +285,38 @@ class TimelapseService:
             self.current_segment_id = None
             self.current_segment_frames = []
             self.frames_captured = 0
+    
+    async def trigger_fall_cutoff(self):
+        """
+        Trigger immediate cutoff for fall detection
+        Creates a video with FALL_ prefix and starts a new segment
+        
+        Returns:
+            str: The video ID of the fall segment (with FALL_ prefix)
+        """
+        if not self.is_recording:
+            print("⚠️  Cannot trigger fall cutoff: not recording")
+            return None
+        
+        if not self.current_segment_id:
+            print("⚠️  Cannot trigger fall cutoff: no active segment")
+            return None
+        
+        if self.frames_captured == 0:
+            print("⚠️  Cannot trigger fall cutoff: no frames captured yet")
+            return None
+        
+        fall_segment_id = self.current_segment_id
+        print(f"🚨 Fall detected! Cutting off segment: {fall_segment_id}")
+        
+        # Complete current segment
+        await self._complete_segment()
+        
+        # Start new segment with FALL_ prefix
+        from config import FALL_VIDEO_PREFIX
+        self._start_new_segment(prefix=FALL_VIDEO_PREFIX)
+        
+        return fall_segment_id
     
     async def _create_video(self, video_id: str, frames: List[np.ndarray], recorded_at: datetime) -> Optional[str]:
         """
@@ -484,7 +523,8 @@ class TimelapseService:
             )
             
             if upload_response.status_code not in [200, 201, 204]:
-                raise Exception(f"S3 upload failed: {upload_response.status_code}")
+                error_body = upload_response.text[:500] if upload_response.text else "No error body"
+                raise Exception(f"S3 upload failed: {upload_response.status_code} - {error_body}")
             
             # Update database
             self._update_upload_success(video_id, s3_key)
