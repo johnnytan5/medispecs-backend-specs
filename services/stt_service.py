@@ -47,6 +47,9 @@ class STTService:
         self.vision_wake_word_detected = False
         self.command_timeout = 5  # seconds to record command
         
+        # Pause flag (for fall confirmation or other interruptions)
+        self.paused = False  # When True, wake word detection is temporarily disabled
+        
         # Callbacks for integration
         self.on_wake_word_callback: Optional[Callable] = None
         self.on_command_callback: Optional[Callable] = None
@@ -210,6 +213,10 @@ class STTService:
                                 import time
                                 timestamp = time.strftime("%H:%M:%S")
                                 print(f"🎤 [{timestamp}] [TRANSCRIBED] '{text}'")
+                                
+                                # Skip wake word detection if paused (e.g., during fall confirmation)
+                                if self.paused:
+                                    continue
                                 
                                 # Check for vision wake word first (more specific)
                                 if not self.vision_wake_word_detected and not self.wake_word_detected and self.vision_wake_word in text:
@@ -490,80 +497,90 @@ class STTService:
         """
         print(f"👂 Listening for fall confirmation (keyword: '{keyword}', timeout: {timeout}s)...")
         
-        # Clear recognizer state
-        self.recognizer = None
-        from vosk import KaldiRecognizer
-        self.recognizer = KaldiRecognizer(self.model, self.sample_rate)
+        # Pause wake word detection during fall confirmation
+        was_paused = self.paused
+        self.paused = True
         
-        # Clear audio queue
-        while not self.audio_queue.empty():
-            try:
-                self.audio_queue.get_nowait()
-            except:
-                break
-        
-        # Listen for timeout duration
-        start_time = time.time()
-        transcribed_parts = []
-        
-        print(f"   (Listening for '{keyword}'...)")
-        
-        while time.time() - start_time < timeout:
-            try:
-                data = self.audio_queue.get(timeout=0.5)
-                
-                # Get partial results for real-time feedback
-                partial_result = json.loads(self.recognizer.PartialResult())
-                partial_text = partial_result.get('partial', '').lower()
-                
-                # Check if keyword is in partial result (early exit)
-                if keyword.lower() in partial_text:
-                    print(f"   ✅ Keyword '{keyword}' detected early!")
-                    transcribed_parts.append(partial_text)
+        try:
+            # Clear recognizer state
+            self.recognizer = None
+            from vosk import KaldiRecognizer
+            self.recognizer = KaldiRecognizer(self.model, self.sample_rate)
+            
+            # Clear audio queue
+            while not self.audio_queue.empty():
+                try:
+                    self.audio_queue.get_nowait()
+                except:
+                    break
+            
+            # Listen for timeout duration
+            start_time = time.time()
+            transcribed_parts = []
+            
+            print(f"   (Listening for '{keyword}'...)")
+            
+            while time.time() - start_time < timeout:
+                try:
+                    data = self.audio_queue.get(timeout=0.5)
                     
-                    # Get final result
-                    final_result = json.loads(self.recognizer.FinalResult())
-                    final_text = final_result.get('text', '').strip()
-                    if final_text:
-                        transcribed_parts.append(final_text)
+                    # Get partial results for real-time feedback
+                    partial_result = json.loads(self.recognizer.PartialResult())
+                    partial_text = partial_result.get('partial', '').lower()
                     
-                    full_text = ' '.join(transcribed_parts).strip()
-                    print(f"   💬 Transcribed: '{full_text}'")
-                    return (True, full_text)
-                
-                if self.recognizer.AcceptWaveform(data):
-                    result = json.loads(self.recognizer.Result())
-                    text = result.get('text', '').strip()
-                    if text:
-                        transcribed_parts.append(text)
+                    # Check if keyword is in partial result (early exit)
+                    if keyword.lower() in partial_text:
+                        print(f"   ✅ Keyword '{keyword}' detected early!")
+                        transcribed_parts.append(partial_text)
                         
-                        # Check if keyword is in transcribed text
-                        if keyword.lower() in text.lower():
-                            full_text = ' '.join(transcribed_parts).strip()
-                            print(f"   ✅ Keyword '{keyword}' found in: '{full_text}'")
-                            return (True, full_text)
-                
-                await asyncio.sleep(0.01)
-                
-            except queue.Empty:
-                continue
+                        # Get final result
+                        final_result = json.loads(self.recognizer.FinalResult())
+                        final_text = final_result.get('text', '').strip()
+                        if final_text:
+                            transcribed_parts.append(final_text)
+                        
+                        full_text = ' '.join(transcribed_parts).strip()
+                        print(f"   💬 Transcribed: '{full_text}'")
+                        return (True, full_text)
+                    
+                    if self.recognizer.AcceptWaveform(data):
+                        result = json.loads(self.recognizer.Result())
+                        text = result.get('text', '').strip()
+                        if text:
+                            transcribed_parts.append(text)
+                            
+                            # Check if keyword is in transcribed text
+                            if keyword.lower() in text.lower():
+                                full_text = ' '.join(transcribed_parts).strip()
+                                print(f"   ✅ Keyword '{keyword}' found in: '{full_text}'")
+                                return (True, full_text)
+                    
+                    await asyncio.sleep(0.01)
+                    
+                except queue.Empty:
+                    continue
+            
+            # Timeout - get final result
+            final_result = json.loads(self.recognizer.FinalResult())
+            final_text = final_result.get('text', '').strip()
+            if final_text:
+                transcribed_parts.append(final_text)
+            
+            full_text = ' '.join(transcribed_parts).strip()
+            
+            if full_text:
+                # Check one more time if keyword is present
+                confirmed = keyword.lower() in full_text.lower()
+                print(f"   {'✅' if confirmed else '❌'} Timeout - Transcribed: '{full_text}'")
+                return (confirmed, full_text)
+            else:
+                print(f"   ⏱️ Timeout - No speech detected")
+                return (False, None)
         
-        # Timeout - get final result
-        final_result = json.loads(self.recognizer.FinalResult())
-        final_text = final_result.get('text', '').strip()
-        if final_text:
-            transcribed_parts.append(final_text)
-        
-        full_text = ' '.join(transcribed_parts).strip()
-        
-        if full_text:
-            # Check one more time if keyword is present
-            confirmed = keyword.lower() in full_text.lower()
-            print(f"   {'✅' if confirmed else '❌'} Timeout - Transcribed: '{full_text}'")
-            return (confirmed, full_text)
-        else:
-            print(f"   ⏱️ Timeout - No speech detected")
-            return (False, None)
+        finally:
+            # Always restore the previous paused state
+            self.paused = was_paused
+            print(f"👂 Resume wake word listening...")
     
     async def test_listen(self, duration: int = 5) -> str:
         """
