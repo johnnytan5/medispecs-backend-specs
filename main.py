@@ -211,7 +211,7 @@ async def lifespan(app: FastAPI):
                     oled = get_oled_service()
                     
                     # Fire and forget for TTS and OLED (simultaneous)
-                    tts_task = asyncio.create_task(tts.speak(config.FALL_TTS_ALERT))
+                    tts_task = asyncio.create_task(tts.speak_async(config.FALL_TTS_ALERT))
                     oled_task = asyncio.create_task(oled.show_message(config.FALL_OLED_MESSAGE))
                     
                     # Wait for both to complete (TTS might take longer)
@@ -231,7 +231,7 @@ async def lifespan(app: FastAPI):
                         if user_confirmed:
                             print(f"✅ User confirmed: '{response_text}'")
                             # Speak positive response
-                            await tts.speak("Glad you're okay!")
+                            await tts.speak_async("Glad you're okay!")
                         else:
                             print(f"⚠️  No confirmation received (timeout)")
                             # Emergency alert will be visible in /accelerometer/emergency/status endpoint
