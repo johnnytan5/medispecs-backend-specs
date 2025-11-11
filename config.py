@@ -85,3 +85,21 @@ VISION_SYSTEM_PROMPT: Final[str] = (
     "Focus on what they asked about."
 )
 
+# Timelapse Recording Configuration
+TIMELAPSE_ENABLED: Final[bool] = True  # Enable automatic timelapse recording
+TIMELAPSE_FRAME_INTERVAL: Final[int] = 2  # Capture 1 frame every 2 seconds
+TIMELAPSE_SEGMENT_DURATION: Final[int] = 900  # 15 minutes per video segment (900 seconds)
+TIMELAPSE_VIDEO_FPS: Final[int] = 30  # Playback speed (30 FPS = smooth timelapse)
+TIMELAPSE_VIDEO_QUALITY: Final[int] = 80  # Video quality (0-100, higher = better quality)
+TIMELAPSE_STORAGE_PATH: Final[str] = "timelapse"  # Local storage directory
+TIMELAPSE_MAX_AGE_HOURS: Final[int] = 24  # Delete local videos older than 24 hours
+
+# Timelapse Upload Configuration
+TIMELAPSE_UPLOAD_ENABLED: Final[bool] = True  # Auto-upload to S3 via Lambda
+TIMELAPSE_LAMBDA_URL: Final[str] = os.getenv("LAMBDA_API_URL", "")  # Lambda API Gateway URL from .env
+TIMELAPSE_UPLOAD_IMMEDIATE: Final[bool] = True  # Upload immediately after video creation
+TIMELAPSE_UPLOAD_RETRY_IMMEDIATE: Final[int] = 3  # Immediate retry attempts on failure
+TIMELAPSE_UPLOAD_RETRY_INTERVAL: Final[int] = 3600  # Background retry every 1 hour (3600 seconds)
+TIMELAPSE_UPLOAD_MAX_ATTEMPTS: Final[int] = 24  # Max retry attempts (24 hours of hourly retries)
+TIMELAPSE_DEVICE_ID: Final[str] = os.getenv("DEVICE_ID", "medispecs_pi_001")  # Device identifier
+

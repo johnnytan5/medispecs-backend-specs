@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import init_db, AsyncSessionLocal
-from routers import reminders, webhooks, display, face_recognition, streaming, tts, stt
+from routers import reminders, webhooks, display, face_recognition, streaming, tts, stt, timelapse
 from services.reminder_service import ReminderService
 from services.reminder_scheduler import get_scheduler
 from services.face_detection_service import get_face_detection_service
@@ -22,7 +22,8 @@ from config import (
     LLM_SYSTEM_PROMPT,
     VISION_ENABLED,
     VISION_MODEL,
-    VISION_WAKE_WORD
+    VISION_WAKE_WORD,
+    TIMELAPSE_ENABLED
 )
 import asyncio
 
@@ -132,6 +133,35 @@ async def lifespan(app: FastAPI):
     else:
         print("⏸️  Speech-to-Text disabled (set STT_ENABLED=True to enable)")
     
+    # Initialize Timelapse service (if enabled)
+    timelapse_service = None
+    if TIMELAPSE_ENABLED:
+        from services.timelapse_service import get_timelapse_service
+        import config
+        
+        timelapse_service = get_timelapse_service()
+        
+        # Prepare config dict
+        timelapse_config = {
+            'TIMELAPSE_FRAME_INTERVAL': config.TIMELAPSE_FRAME_INTERVAL,
+            'TIMELAPSE_SEGMENT_DURATION': config.TIMELAPSE_SEGMENT_DURATION,
+            'TIMELAPSE_VIDEO_FPS': config.TIMELAPSE_VIDEO_FPS,
+            'TIMELAPSE_VIDEO_QUALITY': config.TIMELAPSE_VIDEO_QUALITY,
+            'TIMELAPSE_STORAGE_PATH': config.TIMELAPSE_STORAGE_PATH,
+            'TIMELAPSE_MAX_AGE_HOURS': config.TIMELAPSE_MAX_AGE_HOURS
+        }
+        
+        if timelapse_service.initialize(timelapse_config):
+            # Start recording automatically
+            await timelapse_service.start()
+            print(f"🎬 Timelapse recording enabled (1 frame/{config.TIMELAPSE_FRAME_INTERVAL}s, "
+                  f"{config.TIMELAPSE_SEGMENT_DURATION//60}min segments)")
+        else:
+            print(f"⚠️  Timelapse initialization failed")
+            timelapse_service = None
+    else:
+        print("⏸️  Timelapse disabled (set TIMELAPSE_ENABLED=True to enable)")
+    
     print(f"🎯 Service ready for user: {USER_ID}")
     print("=" * 60)
     
@@ -145,6 +175,10 @@ async def lifespan(app: FastAPI):
     # Stop STT service if running
     if stt_service and stt_service.is_running:
         await stt_service.stop()
+    
+    # Stop Timelapse service if running
+    if timelapse_service and timelapse_service.is_running:
+        await timelapse_service.stop()
     
     print("=" * 60)
 
@@ -173,6 +207,7 @@ app.include_router(face_recognition.router)
 app.include_router(streaming.router)
 app.include_router(tts.router)
 app.include_router(stt.router)
+app.include_router(timelapse.router)
 
 
 @app.get("/")
@@ -192,7 +227,8 @@ async def root():
             "Text-to-Speech (Voice Reminders & Greetings)",
             "Speech-to-Text (Voice Commands with Wake Word)",
             "AI Voice Assistant (OpenAI GPT-3.5-Turbo)",
-            "AI Vision Assistant (OpenAI GPT-4o with Camera)"
+            "AI Vision Assistant (OpenAI GPT-4o with Camera)",
+            "Timelapse Recording (15-min segments, Auto-upload to S3)"
         ]
     }
 

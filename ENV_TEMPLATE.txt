@@ -2,10 +2,19 @@
 # Create a file named ".env" in your project root with these variables
 
 # ============================================================================
-# OpenAI API Configuration (REQUIRED for voice assistant)
+# OpenAI API Configuration (REQUIRED for voice assistant and vision)
 # ============================================================================
 # Get your API key from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# ============================================================================
+# Timelapse Upload Configuration (REQUIRED for video upload)
+# ============================================================================
+# Lambda API Gateway URL for uploading videos to S3
+LAMBDA_API_URL=https://xxxxxxxxxx.execute-api.ap-southeast-1.amazonaws.com/prod
+
+# Optional: Custom device identifier
+# DEVICE_ID=medispecs_pi_001
 
 # ============================================================================
 # AWS Configuration (Face Recognition)
