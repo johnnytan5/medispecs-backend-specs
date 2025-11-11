@@ -15,7 +15,7 @@ ENDPOINT
 
 URL: GET /accelerometer/emergency/status
 
-Via ngrok: https://YOUR-NGROK-URL.ngrok.io/accelerometer/emergency/status
+Via ngrok: use .env.local value
 Via local: http://localhost:8000/accelerometer/emergency/status
 
 Poll Interval: Every 5 seconds
@@ -68,6 +68,7 @@ user_response can be one of THREE values:
    ──────────────
    MEANING: 15 seconds passed, user did NOT say "okay"
    TIMING:  After 15 second timeout
+   PERSISTENCE: Status remains visible for 50 seconds before clearing
    ACTION:  🚨 SEND EMERGENCY ALERT! Call 911, notify caregiver!
 
 ================================================================================
@@ -234,6 +235,12 @@ t=20s  : Caregiver polls endpoint
          └─> Response: user_response = "NO_RESPONSE"
          └─> Frontend: 🚨 EMERGENCY ALERT!
 
+t=30s  : Still shows NO_RESPONSE (persists for 50s total)
+t=40s  : Still shows NO_RESPONSE
+t=50s  : Still shows NO_RESPONSE
+t=65s  : Fall event cleared (50s after NO_RESPONSE set at t=15s)
+         └─> latest_fall = null
+
 ================================================================================
 IMPLEMENTATION TIPS
 ================================================================================
@@ -249,6 +256,7 @@ IMPLEMENTATION TIPS
    - Only send ONE emergency alert per fall event
    - Track fall by timestamp to avoid duplicate alerts
    - Example: Store last alerted timestamp in localStorage
+   - Note: NO_RESPONSE status persists for 50 seconds, don't alert multiple times
 
 3. SHOW COUNTDOWN TIMER (Optional)
    --------------------------------

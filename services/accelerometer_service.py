@@ -304,6 +304,28 @@ class AccelerometerService:
             self.fall_acknowledged = True
             
             print(f"✅ Fall acknowledged: {self.latest_fall_event['user_response']}")
+            
+            # If NO_RESPONSE, keep status visible for configured duration before clearing
+            if not user_confirmed:
+                from config import FALL_NO_RESPONSE_PERSISTENCE
+                print(f"⏱️  NO_RESPONSE will be visible for {FALL_NO_RESPONSE_PERSISTENCE} seconds for caregiver monitoring")
+                # Schedule cleanup after delay
+                asyncio.create_task(self._clear_fall_after_delay(FALL_NO_RESPONSE_PERSISTENCE))
+    
+    async def _clear_fall_after_delay(self, delay_seconds: int):
+        """
+        Clear fall event after delay (for NO_RESPONSE persistence)
+        
+        Args:
+            delay_seconds: Seconds to wait before clearing
+        """
+        await asyncio.sleep(delay_seconds)
+        
+        # Only clear if it's still the same fall event and it's NO_RESPONSE
+        if self.latest_fall_event and self.latest_fall_event.get('user_response') == 'NO_RESPONSE':
+            print(f"🧹 Clearing NO_RESPONSE fall event after {delay_seconds}s")
+            self.latest_fall_event = None
+            self.fall_acknowledged = False
     
     def get_current_readings(self) -> Dict[str, Any]:
         """Get current accelerometer readings"""

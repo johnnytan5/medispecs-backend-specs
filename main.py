@@ -211,8 +211,9 @@ async def lifespan(app: FastAPI):
                     oled = get_oled_service()
                     
                     # Fire and forget for TTS and OLED (simultaneous)
+                    # OLED is synchronous, so run in thread pool
                     tts_task = asyncio.create_task(tts.speak_async(config.FALL_TTS_ALERT))
-                    oled_task = asyncio.create_task(oled.show_message(config.FALL_OLED_MESSAGE))
+                    oled_task = asyncio.create_task(asyncio.to_thread(oled.show_message, config.FALL_OLED_MESSAGE))
                     
                     # Wait for both to complete (TTS might take longer)
                     await asyncio.gather(tts_task, oled_task)
