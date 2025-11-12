@@ -113,17 +113,28 @@ class MedicationDetectionService:
             reference_photo_url: URL to reference photo from Lambda
             window_duration_seconds: Detection window duration (default 5 minutes = 300s)
         """
+        print(f"\n{'='*60}")
+        print(f"🚀 [DETECTION] start_detection() called")
+        print(f"   Medication: {medication_name} ({medication_id})")
+        print(f"   Window: {window_duration_seconds}s")
+        print(f"{'='*60}")
+        
         if self.is_detecting:
             print("⚠️  Medication detection already active")
             return
         
         if not self.model:
             print("❌ Medication model not loaded")
+            print(f"   Model path: {self.model_path}")
+            print(f"   Model exists: {Path(self.model_path).exists() if self.model_path else 'N/A'}")
             return
         
         if not self.face_detection_service:
             print("❌ Face detection service not available (needed for frame sharing)")
+            print(f"   face_detection_service: {self.face_detection_service}")
             return
+        
+        print(f"✅ [DETECTION] All checks passed, initializing detection...")
         
         self.is_detecting = True
         start_time = datetime.now()
@@ -138,13 +149,17 @@ class MedicationDetectionService:
         }
         
         # Start detection loop
+        print(f"📋 [DETECTION] Creating detection task...")
         self.detection_task = asyncio.create_task(self._detection_loop())
+        print(f"✅ [DETECTION] Detection task created: {self.detection_task}")
         
         print(f"🔍 Started medication detection for: {medication_name}")
         print(f"   Window duration: {window_duration_seconds}s")
         print(f"   Model: {self.model_path}")
         print(f"   Confidence threshold: {self.confidence_threshold}")
         print(f"   Reference photo URL: {reference_photo_url[:80] if reference_photo_url else 'None'}...")
+        print(f"   is_detecting flag: {self.is_detecting}")
+        print(f"{'='*60}\n")
     
     async def stop_detection(self):
         """Stop current detection session"""
@@ -168,6 +183,10 @@ class MedicationDetectionService:
         Main detection loop
         Runs at ~2Hz (every 0.5 seconds) to detect medication bottles
         """
+        print(f"\n{'='*60}")
+        print(f"🔄 [YOLO LOOP] _detection_loop() ENTERED")
+        print(f"{'='*60}")
+        
         detection_interval = 0.5  # 2Hz
         loop_count = 0
         last_status_log = time.time()
@@ -176,6 +195,9 @@ class MedicationDetectionService:
         print(f"🔍 Medication YOLO detection loop started")
         print(f"   Confidence threshold: {self.confidence_threshold}")
         print(f"   Detection interval: {detection_interval}s (2Hz)")
+        print(f"   Current detection state: {self.current_detection}")
+        print(f"   is_detecting flag: {self.is_detecting}")
+        print(f"{'='*60}\n")
         
         while self.is_detecting:
             try:

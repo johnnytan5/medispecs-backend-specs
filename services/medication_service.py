@@ -380,14 +380,23 @@ class MedicationService:
         # Start detection (if detection service is available)
         if self.detection_service:
             print(f"🔍 Starting medication detection (5 minute window)...")
-            await self.detection_service.start_detection(
-                medication_id=medication_id,
-                medication_name=name,
-                reference_photo_url=photo_url,
-                window_duration_seconds=self.detection_window_minutes * 60
-            )
+            print(f"   Detection service type: {type(self.detection_service).__name__}")
+            print(f"   Detection service initialized: {self.detection_service.model is not None if hasattr(self.detection_service, 'model') else 'N/A'}")
+            try:
+                await self.detection_service.start_detection(
+                    medication_id=medication_id,
+                    medication_name=name,
+                    reference_photo_url=photo_url,
+                    window_duration_seconds=self.detection_window_minutes * 60
+                )
+                print(f"✅ Detection service started successfully")
+            except Exception as e:
+                print(f"❌ Error starting detection service: {e}")
+                import traceback
+                traceback.print_exc()
         else:
-            print(f"⚠️  Detection service not available")
+            print(f"⚠️  Detection service not available (self.detection_service is None)")
+            print(f"   This means detection service was not wired in main.py")
         
         # Schedule cleanup after window expires
         asyncio.create_task(self._clear_active_detection_after_window())
