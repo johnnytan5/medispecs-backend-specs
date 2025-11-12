@@ -124,3 +124,25 @@ FALL_TTS_ALERT: Final[str] = "Fall detected! Are you okay? Please say okay"  # T
 FALL_OLED_MESSAGE: Final[str] = "Fall Alert\nSpeak Up!"  # OLED message on fall
 FALL_VIDEO_PREFIX: Final[str] = "FALL_"  # Prefix for fall-triggered timelapse segments
 
+# ============================================================================
+# Medication Check Configuration
+# ============================================================================
+MEDICATION_ENABLED: Final[bool] = True  # Enable medication detection
+MEDICATION_DB_PATH: Final[str] = "medications.db"  # SQLite database path
+MEDICATION_POLL_INTERVAL: Final[int] = 7200  # Poll Lambda every 2 hours (7200 seconds)
+MEDICATION_DETECTION_WINDOW: Final[int] = 5  # Minutes after scheduled time to enable detection
+MEDICATION_YOLO_MODEL: Final[str] = "medication_model.pt"  # Custom YOLO model for medication bottles
+MEDICATION_YOLO_CONFIDENCE: Final[float] = 0.05  # Confidence threshold for medication detection
+MEDICATION_LAMBDA_URL: Final[str] = os.getenv("LAMBDA_API_URL", "")  # Lambda API Gateway URL (same as timelapse)
+MEDICATION_CHECK_INTERVAL: Final[int] = 60  # Check for due medications every 60 seconds
+
+# Medication Detection Messages
+MEDICATION_TTS_REMINDER: Final[str] = "Time to take your medication. Please show the medication bottle."
+MEDICATION_TTS_MATCH: Final[str] = "Medication verified. Thank you!"
+MEDICATION_TTS_NO_MATCH: Final[str] = "Medication not recognized. Please show the correct medication."
+MEDICATION_TTS_NOT_DETECTED: Final[str] = "No medication bottle detected. Please try again."
+MEDICATION_OLED_REMINDER: Final[str] = "Medication\nTime!"
+MEDICATION_OLED_VERIFYING: Final[str] = "Verifying\nMedication..."
+MEDICATION_OLED_MATCH: Final[str] = "Medication\nVerified!"
+MEDICATION_OLED_NO_MATCH: Final[str] = "Wrong\nMedication"
+

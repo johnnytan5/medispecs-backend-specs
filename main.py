@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import init_db, AsyncSessionLocal
-from routers import reminders, webhooks, display, face_recognition, streaming, tts, stt, timelapse, accelerometer
+from routers import reminders, webhooks, display, face_recognition, streaming, tts, stt, timelapse, accelerometer, medications
 from services.reminder_service import ReminderService
 from services.reminder_scheduler import get_scheduler
 from services.face_detection_service import get_face_detection_service
@@ -24,7 +24,8 @@ from config import (
     VISION_MODEL,
     VISION_WAKE_WORD,
     TIMELAPSE_ENABLED,
-    ACCELEROMETER_ENABLED
+    ACCELEROMETER_ENABLED,
+    MEDICATION_ENABLED
 )
 import asyncio
 
@@ -269,6 +270,54 @@ async def lifespan(app: FastAPI):
     else:
         print("⏸️  Fall detection disabled (set ACCELEROMETER_ENABLED=True to enable)")
     
+    # Initialize Medication service (if enabled)
+    medication_service = None
+    medication_detection_service = None
+    if MEDICATION_ENABLED:
+        from services.medication_service import get_medication_service
+        from services.medication_detection_service import get_medication_detection_service
+        import config
+        
+        medication_service = get_medication_service()
+        medication_detection_service = get_medication_detection_service()
+        
+        # Prepare config dict
+        medication_config = {
+            'MEDICATION_DB_PATH': config.MEDICATION_DB_PATH,
+            'MEDICATION_LAMBDA_URL': config.MEDICATION_LAMBDA_URL,
+            'MEDICATION_POLL_INTERVAL': config.MEDICATION_POLL_INTERVAL,
+            'MEDICATION_CHECK_INTERVAL': config.MEDICATION_CHECK_INTERVAL,
+            'MEDICATION_DETECTION_WINDOW': config.MEDICATION_DETECTION_WINDOW
+        }
+        
+        detection_config = {
+            'MEDICATION_YOLO_MODEL': config.MEDICATION_YOLO_MODEL,
+            'MEDICATION_YOLO_CONFIDENCE': config.MEDICATION_YOLO_CONFIDENCE
+        }
+        
+        if medication_service.initialize(medication_config):
+            # Initialize detection service
+            if medication_detection_service.initialize(detection_config):
+                # Wire detection service to medication service
+                medication_service.detection_service = medication_detection_service
+                
+                # Wire face detection service to medication detection service (for frame sharing)
+                medication_detection_service.face_detection_service = face_detector
+                
+                # Start medication service
+                await medication_service.start()
+                print(f"💊 Medication service enabled")
+                print(f"   Polling Lambda every {config.MEDICATION_POLL_INTERVAL//3600}h")
+                print(f"   Detection window: {config.MEDICATION_DETECTION_WINDOW} minutes")
+            else:
+                print(f"⚠️  Medication detection initialization failed")
+                medication_detection_service = None
+        else:
+            print(f"⚠️  Medication service initialization failed")
+            medication_service = None
+    else:
+        print("⏸️  Medication service disabled (set MEDICATION_ENABLED=True to enable)")
+    
     print(f"🎯 Service ready for user: {USER_ID}")
     print("=" * 60)
     
@@ -290,6 +339,12 @@ async def lifespan(app: FastAPI):
     # Stop Accelerometer service if running
     if accelerometer_service and accelerometer_service.is_running:
         await accelerometer_service.stop()
+    
+    # Stop Medication services if running
+    if medication_service and medication_service.is_running:
+        await medication_service.stop()
+    if medication_detection_service and medication_detection_service.is_detecting:
+        await medication_detection_service.stop_detection()
     
     print("=" * 60)
 
@@ -320,6 +375,7 @@ app.include_router(tts.router)
 app.include_router(stt.router)
 app.include_router(timelapse.router)
 app.include_router(accelerometer.router)
+app.include_router(medications.router)
 
 
 @app.get("/")
@@ -341,7 +397,8 @@ async def root():
             "AI Voice Assistant (OpenAI GPT-3.5-Turbo)",
             "AI Vision Assistant (OpenAI GPT-4o with Camera)",
             "Timelapse Recording (15-min segments, Auto-upload to S3)",
-            "Fall Detection (MPU6050 Accelerometer with Voice Confirmation)"
+            "Fall Detection (MPU6050 Accelerometer with Voice Confirmation)",
+            "Medication Check (YOLO Detection + OpenAI Vision Verification)"
         ]
     }
 
