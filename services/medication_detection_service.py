@@ -142,6 +142,9 @@ class MedicationDetectionService:
         
         print(f"🔍 Started medication detection for: {medication_name}")
         print(f"   Window duration: {window_duration_seconds}s")
+        print(f"   Model: {self.model_path}")
+        print(f"   Confidence threshold: {self.confidence_threshold}")
+        print(f"   Reference photo URL: {reference_photo_url[:80] if reference_photo_url else 'None'}...")
     
     async def stop_detection(self):
         """Stop current detection session"""
@@ -166,12 +169,23 @@ class MedicationDetectionService:
         Runs at ~2Hz (every 0.5 seconds) to detect medication bottles
         """
         detection_interval = 0.5  # 2Hz
+        loop_count = 0
+        last_status_log = time.time()
+        status_log_interval = 5.0  # Log status every 5 seconds
+        
+        print(f"🔍 Medication YOLO detection loop started")
+        print(f"   Confidence threshold: {self.confidence_threshold}")
+        print(f"   Detection interval: {detection_interval}s (2Hz)")
         
         while self.is_detecting:
             try:
+                loop_count += 1
+                current_time = time.time()
+                
                 # Check if window expired
-                if time.time() >= self.current_detection['window_end']:
-                    print(f"⏱️  Detection window expired")
+                if current_time >= self.current_detection['window_end']:
+                    elapsed = current_time - self.current_detection['start_time'].timestamp()
+                    print(f"⏱️  Detection window expired (ran for {elapsed:.1f}s, {loop_count} detections)")
                     await self._handle_no_detection()
                     break
                 
@@ -180,19 +194,42 @@ class MedicationDetectionService:
                     frame = self.face_detection_service.latest_frame
                 
                 if frame is None:
+                    # Log frame availability issue periodically
+                    if current_time - last_status_log >= status_log_interval:
+                        print(f"⚠️  [YOLO] No frame available from face detection service (loop #{loop_count})")
+                        last_status_log = current_time
                     await asyncio.sleep(detection_interval)
                     continue
                 
+                # Log periodic status
+                if current_time - last_status_log >= status_log_interval:
+                    elapsed = current_time - self.current_detection['start_time'].timestamp()
+                    remaining = self.current_detection['window_end'] - current_time
+                    print(f"📊 [YOLO] Status: {loop_count} detections, {elapsed:.1f}s elapsed, {remaining:.1f}s remaining, frame: {frame.shape if frame is not None else 'None'}")
+                    last_status_log = current_time
+                
                 # Run YOLO detection
-                results = await asyncio.to_thread(self.model.predict, frame, conf=self.confidence_threshold, verbose=False)
+                try:
+                    results = await asyncio.to_thread(
+                        self.model.predict, 
+                        frame, 
+                        conf=self.confidence_threshold, 
+                        verbose=False
+                    )
+                except Exception as e:
+                    print(f"❌ [YOLO] Error running prediction: {e}")
+                    await asyncio.sleep(detection_interval)
+                    continue
                 
                 # Check for medication bottle detections
                 if results and len(results) > 0:
                     boxes = results[0].boxes
                     
                     if len(boxes) > 0:
-                        # Medication bottle detected!
-                        print(f"💊 Medication bottle detected! ({len(boxes)} boxes)")
+                        # Log detection details
+                        confidences = [float(box.conf[0]) for box in boxes]
+                        max_conf = max(confidences)
+                        print(f"💊 [YOLO] Medication bottle detected! ({len(boxes)} boxes, max confidence: {max_conf:.3f})")
                         
                         # Capture frame and verify
                         await self._handle_bottle_detected(frame)
@@ -200,13 +237,24 @@ class MedicationDetectionService:
                         # Stop detection after successful verification
                         if self.current_detection.get('verification_complete'):
                             break
+                    else:
+                        # Log when YOLO runs but finds nothing (only occasionally to avoid spam)
+                        if loop_count % 20 == 0:  # Every 10 seconds (20 loops * 0.5s)
+                            print(f"🔍 [YOLO] Scanning... (no bottles detected, loop #{loop_count})")
+                else:
+                    # Log when YOLO returns no results
+                    if loop_count % 20 == 0:
+                        print(f"🔍 [YOLO] Scanning... (no results, loop #{loop_count})")
                 
                 await asyncio.sleep(detection_interval)
                 
             except asyncio.CancelledError:
+                print(f"🛑 [YOLO] Detection loop cancelled")
                 break
             except Exception as e:
-                print(f"❌ Error in detection loop: {e}")
+                print(f"❌ [YOLO] Error in detection loop: {e}")
+                import traceback
+                traceback.print_exc()
                 await asyncio.sleep(1.0)
     
     async def _handle_bottle_detected(self, frame: np.ndarray):
