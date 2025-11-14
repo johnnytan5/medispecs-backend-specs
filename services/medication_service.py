@@ -1,6 +1,6 @@
 """
-Medication Service - Medication Reminder & Verification System
-Manages medication schedules, polling from Lambda, and triggering detection
+Medication Service - Medication Reminder System
+Manages medication schedules, polling from Lambda, and triggering reminders
 """
 import asyncio
 import sqlite3
@@ -17,14 +17,13 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 class MedicationService:
     """
-    Service for managing medication schedules and detection
+    Service for managing medication schedules and reminders
     
     Features:
     - SQLite storage for medications
     - Poll Lambda API every 2 hours for medication updates
     - Check for due medications every minute
-    - Trigger 5-minute detection window when medication is due
-    - Coordinate with medication detection service
+    - Trigger TTS + OLED reminders when medication is due
     """
     
     _instance = None
@@ -47,13 +46,10 @@ class MedicationService:
         self.lambda_url = ""
         self.poll_interval = 7200  # 2 hours
         self.check_interval = 60  # 1 minute
-        self.detection_window_minutes = 5
+        self.reminder_window_minutes = 5
         
-        # Detection service callback
-        self.detection_service = None  # Will be set by main.py
-        
-        # Active detection tracking
-        self.active_detection: Optional[Dict[str, Any]] = None  # Current medication being detected
+        # Active reminder tracking
+        self.active_reminder: Optional[Dict[str, Any]] = None  # Current medication reminder
         self.triggered_today: Dict[str, str] = {}  # Track medications triggered today (medication_id -> date)
         self.last_check_date: Optional[str] = None  # Track last date checked (for resetting triggered_today)
     
@@ -73,7 +69,7 @@ class MedicationService:
             self.lambda_url = config.get('MEDICATION_LAMBDA_URL', '')
             self.poll_interval = config.get('MEDICATION_POLL_INTERVAL', 7200)
             self.check_interval = config.get('MEDICATION_CHECK_INTERVAL', 60)
-            self.detection_window_minutes = config.get('MEDICATION_DETECTION_WINDOW', 5)
+            self.reminder_window_minutes = config.get('MEDICATION_DETECTION_WINDOW', 5)  # Reuse config name for compatibility
             
             # Initialize database
             self._init_database()
@@ -84,7 +80,7 @@ class MedicationService:
             print(f"✅ Medication service initialized")
             print(f"   Database: {self.db_path}")
             print(f"   Poll interval: {self.poll_interval//3600}h")
-            print(f"   Detection window: {self.detection_window_minutes} minutes")
+            print(f"   Reminder window: {self.reminder_window_minutes} minutes")
             
             return True
             
@@ -205,10 +201,24 @@ class MedicationService:
             medications = response.json()
             print(f"📋 Received {len(medications)} medications from Lambda")
             
+            # Extract medication IDs from Lambda response
+            cloud_medication_ids = {med.get('medicationId') for med in medications if med.get('medicationId')}
+            
             # Sync to local database
             conn = sqlite3.connect(str(self.db_path), timeout=10.0)
             cursor = conn.cursor()
             
+            # Step 1: Delete local medications that are NOT in cloud (handles deletions)
+            cursor.execute('SELECT medication_id FROM medications')
+            local_medication_ids = {row[0] for row in cursor.fetchall()}
+            deleted_ids = local_medication_ids - cloud_medication_ids
+            
+            if deleted_ids:
+                placeholders = ','.join(['?'] * len(deleted_ids))
+                cursor.execute(f'DELETE FROM medications WHERE medication_id IN ({placeholders})', list(deleted_ids))
+                print(f"🗑️  Deleted {len(deleted_ids)} medications not in cloud: {deleted_ids}")
+            
+            # Step 2: Insert or update medications from cloud
             synced_count = 0
             for med in medications:
                 medication_id = med.get('medicationId')
@@ -242,6 +252,8 @@ class MedicationService:
             conn.close()
             
             print(f"✅ Synced {synced_count} medications to local database")
+            if deleted_ids:
+                print(f"   (Deleted {len(deleted_ids)} medications that were removed from cloud)")
             
         except Exception as e:
             print(f"❌ Error polling medications: {e}")
@@ -249,7 +261,7 @@ class MedicationService:
             traceback.print_exc()
     
     async def _check_due_medications(self):
-        """Check for medications that are due now (within 5-minute window)"""
+        """Check for medications that are due now (within reminder window)"""
         if not self.is_running:
             return
         
@@ -288,9 +300,9 @@ class MedicationService:
                 if self.triggered_today.get(medication_id) == current_date:
                     continue  # Already triggered today
                 
-                # Check if we're already detecting this medication
-                if self.active_detection and self.active_detection.get('medication_id') == medication_id:
-                    continue  # Already detecting
+                # Check if we're already showing reminder for this medication
+                if self.active_reminder and self.active_reminder.get('medication_id') == medication_id:
+                    continue  # Already showing reminder
                 
                 # Parse scheduled time
                 try:
@@ -299,13 +311,13 @@ class MedicationService:
                 except:
                     continue  # Invalid time format
                 
-                # Check if we're within the detection window (0-5 minutes after scheduled time)
+                # Check if we're within the reminder window (0-5 minutes after scheduled time)
                 time_diff = current_minutes - scheduled_minutes
                 
-                if 0 <= time_diff <= self.detection_window_minutes:
-                    # Within window! Trigger detection
+                if 0 <= time_diff <= self.reminder_window_minutes:
+                    # Within window! Trigger reminder
                     print(f"⏰ Medication '{name}' is due (scheduled: {scheduled_time_str}, current: {current_time_str})")
-                    await self._trigger_medication_detection(medication_id, name, scheduled_time_str)
+                    await self._trigger_medication_reminder(medication_id, name, scheduled_time_str)
                     # Mark as triggered today
                     self.triggered_today[medication_id] = current_date
             
@@ -314,9 +326,9 @@ class MedicationService:
             import traceback
             traceback.print_exc()
     
-    async def _trigger_medication_detection(self, medication_id: str, name: str, scheduled_time: str):
+    async def _trigger_medication_reminder(self, medication_id: str, name: str, scheduled_time: str):
         """
-        Trigger medication detection for a due medication
+        Trigger medication reminder (TTS + OLED) for a due medication
         
         Args:
             medication_id: Medication ID
@@ -339,28 +351,13 @@ class MedicationService:
             print(f"❌ Medication not found: {medication_id}")
             return
         
-        photo_url = med_row[5]  # photo_url column
-        
-        # Build full photo URL if it's a relative path
-        if photo_url and not photo_url.startswith('http'):
-            # Lambda returns relative URL like "/medications/{id}/photo"
-            # Prepend Lambda base URL
-            if photo_url.startswith('/'):
-                photo_url = f"{self.lambda_url}{photo_url}"
-            else:
-                photo_url = f"{self.lambda_url}/medications/{medication_id}/photo"
-        
-        if not photo_url:
-            print(f"⚠️  No photo URL for medication {medication_id}, detection will skip verification")
-        
-        # Set active detection
-        self.active_detection = {
+        # Set active reminder
+        self.active_reminder = {
             'medication_id': medication_id,
             'name': name,
             'scheduled_time': scheduled_time,
-            'photo_url': photo_url,
             'start_time': datetime.now(),
-            'window_end': datetime.now() + timedelta(minutes=self.detection_window_minutes)
+            'window_end': datetime.now() + timedelta(minutes=self.reminder_window_minutes)
         }
         
         # Play reminder TTS and show OLED
@@ -377,82 +374,24 @@ class MedicationService:
         
         await asyncio.gather(tts_task, oled_task)
         
-        # Start detection (if detection service is available)
-        if self.detection_service:
-            print(f"🔍 Starting medication detection (5 minute window)...")
-            print(f"   Detection service type: {type(self.detection_service).__name__}")
-            print(f"   Detection service initialized: {self.detection_service.model is not None if hasattr(self.detection_service, 'model') else 'N/A'}")
-            try:
-                await self.detection_service.start_detection(
-                    medication_id=medication_id,
-                    medication_name=name,
-                    reference_photo_url=photo_url,
-                    window_duration_seconds=self.detection_window_minutes * 60
-                )
-                print(f"✅ Detection service started successfully")
-            except Exception as e:
-                print(f"❌ Error starting detection service: {e}")
-                import traceback
-                traceback.print_exc()
-        else:
-            print(f"⚠️  Detection service not available (self.detection_service is None)")
-            print(f"   This means detection service was not wired in main.py")
-        
         # Schedule cleanup after window expires
-        asyncio.create_task(self._clear_active_detection_after_window())
+        asyncio.create_task(self._clear_active_reminder_after_window())
     
-    async def _clear_active_detection_after_window(self):
-        """Clear active detection after window expires"""
-        if not self.active_detection:
+    async def _clear_active_reminder_after_window(self):
+        """Clear active reminder after window expires"""
+        if not self.active_reminder:
             return
         
-        window_end = self.active_detection['window_end']
+        window_end = self.active_reminder['window_end']
         wait_seconds = (window_end - datetime.now()).total_seconds()
         
         if wait_seconds > 0:
             await asyncio.sleep(wait_seconds)
         
-        # Clear active detection
-        if self.active_detection:
-            print(f"⏱️  Detection window expired for {self.active_detection['name']}")
-            self.active_detection = None
-    
-    def record_detection_result(self, medication_id: str, detected: bool, match_result: Optional[bool], 
-                                confidence: Optional[float], photo_path: Optional[str] = None):
-        """
-        Record medication detection result to database
-        
-        Args:
-            medication_id: Medication ID
-            detected: Whether medication bottle was detected
-            match_result: Whether detected bottle matches reference (True/False/None)
-            confidence: Confidence score from OpenAI Vision
-            photo_path: Path to captured photo (optional)
-        """
-        try:
-            conn = sqlite3.connect(str(self.db_path), timeout=10.0)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO medication_detections (
-                    medication_id, detection_time, detected, match_result, confidence, photo_path
-                ) VALUES (?, ?, ?, ?, ?, ?)
-            ''', (
-                medication_id,
-                datetime.now().isoformat() + 'Z',
-                detected,
-                match_result,
-                confidence,
-                photo_path
-            ))
-            
-            conn.commit()
-            conn.close()
-            
-            print(f"📝 Recorded detection result: detected={detected}, match={match_result}, confidence={confidence}")
-            
-        except Exception as e:
-            print(f"❌ Error recording detection result: {e}")
+        # Clear active reminder
+        if self.active_reminder:
+            print(f"⏱️  Reminder window expired for {self.active_reminder['name']}")
+            self.active_reminder = None
     
     def get_medications(self) -> List[Dict[str, Any]]:
         """Get all medications from database"""
@@ -488,48 +427,6 @@ class MedicationService:
             print(f"❌ Error getting medications: {e}")
             return []
     
-    def get_detection_history(self, medication_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get detection history"""
-        try:
-            conn = sqlite3.connect(str(self.db_path), timeout=10.0)
-            cursor = conn.cursor()
-            
-            if medication_id:
-                cursor.execute('''
-                    SELECT * FROM medication_detections 
-                    WHERE medication_id = ? 
-                    ORDER BY detection_time DESC 
-                    LIMIT ?
-                ''', (medication_id, limit))
-            else:
-                cursor.execute('''
-                    SELECT * FROM medication_detections 
-                    ORDER BY detection_time DESC 
-                    LIMIT ?
-                ''', (limit,))
-            
-            rows = cursor.fetchall()
-            conn.close()
-            
-            detections = []
-            for row in rows:
-                detections.append({
-                    'id': row[0],
-                    'medication_id': row[1],
-                    'detection_time': row[2],
-                    'detected': bool(row[3]),
-                    'match_result': bool(row[4]) if row[4] is not None else None,
-                    'confidence': row[5],
-                    'photo_path': row[6],
-                    'notes': row[7]
-                })
-            
-            return detections
-            
-        except Exception as e:
-            print(f"❌ Error getting detection history: {e}")
-            return []
-
 
 # Singleton accessor
 _medication_service: Optional[MedicationService] = None

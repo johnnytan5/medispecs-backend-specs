@@ -272,14 +272,11 @@ async def lifespan(app: FastAPI):
     
     # Initialize Medication service (if enabled)
     medication_service = None
-    medication_detection_service = None
     if MEDICATION_ENABLED:
         from services.medication_service import get_medication_service
-        from services.medication_detection_service import get_medication_detection_service
         import config
         
         medication_service = get_medication_service()
-        medication_detection_service = get_medication_detection_service()
         
         # Prepare config dict
         medication_config = {
@@ -290,33 +287,12 @@ async def lifespan(app: FastAPI):
             'MEDICATION_DETECTION_WINDOW': config.MEDICATION_DETECTION_WINDOW
         }
         
-        detection_config = {
-            'MEDICATION_YOLO_MODEL': config.MEDICATION_YOLO_MODEL,
-            'MEDICATION_YOLO_CONFIDENCE': config.MEDICATION_YOLO_CONFIDENCE
-        }
-        
         if medication_service.initialize(medication_config):
-            # Initialize detection service
-            if medication_detection_service.initialize(detection_config):
-                # Wire detection service to medication service
-                medication_service.detection_service = medication_detection_service
-                print(f"✅ Wired detection service to medication service")
-                
-                # Wire face detection service to medication detection service (for frame sharing)
-                medication_detection_service.face_detection_service = face_detector
-                print(f"✅ Wired face detection service to medication detection service")
-                print(f"   Face detection service: {type(face_detector).__name__}")
-                print(f"   Face detection running: {face_detector.is_running if hasattr(face_detector, 'is_running') else 'N/A'}")
-                
-                # Start medication service
-                await medication_service.start()
-                print(f"💊 Medication service enabled")
-                print(f"   Polling Lambda every {config.MEDICATION_POLL_INTERVAL//3600}h")
-                print(f"   Detection window: {config.MEDICATION_DETECTION_WINDOW} minutes")
-                print(f"   Detection service wired: {medication_service.detection_service is not None}")
-            else:
-                print(f"⚠️  Medication detection initialization failed")
-                medication_detection_service = None
+            # Start medication service
+            await medication_service.start()
+            print(f"💊 Medication service enabled")
+            print(f"   Polling Lambda every {config.MEDICATION_POLL_INTERVAL//3600}h")
+            print(f"   Reminder window: {config.MEDICATION_DETECTION_WINDOW} minutes")
         else:
             print(f"⚠️  Medication service initialization failed")
             medication_service = None
@@ -345,11 +321,9 @@ async def lifespan(app: FastAPI):
     if accelerometer_service and accelerometer_service.is_running:
         await accelerometer_service.stop()
     
-    # Stop Medication services if running
+    # Stop Medication service if running
     if medication_service and medication_service.is_running:
         await medication_service.stop()
-    if medication_detection_service and medication_detection_service.is_detecting:
-        await medication_detection_service.stop_detection()
     
     print("=" * 60)
 
@@ -403,7 +377,7 @@ async def root():
             "AI Vision Assistant (OpenAI GPT-4o with Camera)",
             "Timelapse Recording (15-min segments, Auto-upload to S3)",
             "Fall Detection (MPU6050 Accelerometer with Voice Confirmation)",
-            "Medication Check (YOLO Detection + OpenAI Vision Verification)"
+            "Medication Reminders (TTS + OLED)"
         ]
     }
 
