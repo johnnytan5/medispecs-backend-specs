@@ -364,8 +364,11 @@ class FaceDetectionService:
                     if TTS_ENABLED and TTS_SPEAK_FACE_GREETINGS:
                         tts = get_tts_service()
                         if tts.is_available:
-                            # Create greeting: "Hello Johnny!"
-                            greeting = f"Hello {name}!"
+                            # Create greeting: "This is your {relationship} {name}." or "This is {name}."
+                            if relationship:
+                                greeting = f"This is your {relationship.lower()} {name}."
+                            else:
+                                greeting = f"This is {name}."
                             # Fire TTS in background (doesn't wait for completion)
                             asyncio.create_task(tts.speak_async(greeting))
                 except Exception as e:

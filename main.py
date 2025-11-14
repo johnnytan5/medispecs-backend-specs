@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import init_db, AsyncSessionLocal
-from routers import reminders, webhooks, display, face_recognition, streaming, tts, stt, timelapse, accelerometer, medications
+from routers import reminders, webhooks, display, face_recognition, streaming, tts, stt, timelapse, accelerometer, medications, location
 from services.reminder_service import ReminderService
 from services.reminder_scheduler import get_scheduler
 from services.face_detection_service import get_face_detection_service
@@ -25,7 +25,8 @@ from config import (
     VISION_WAKE_WORD,
     TIMELAPSE_ENABLED,
     ACCELEROMETER_ENABLED,
-    MEDICATION_ENABLED
+    MEDICATION_ENABLED,
+    LOCATION_ENABLED
 )
 import asyncio
 
@@ -299,6 +300,38 @@ async def lifespan(app: FastAPI):
     else:
         print("⏸️  Medication service disabled (set MEDICATION_ENABLED=True to enable)")
     
+    # Initialize Location service (if enabled)
+    location_service = None
+    if LOCATION_ENABLED:
+        from services.location_service import get_location_service
+        import config
+        
+        location_service = get_location_service()
+        
+        # Prepare config dict
+        location_config = {
+            'LOCATION_DEVICE_ID': config.LOCATION_DEVICE_ID,
+            'LOCATION_LAMBDA_URL': config.LOCATION_LAMBDA_URL,
+            'LOCATION_UPDATE_INTERVAL': config.LOCATION_UPDATE_INTERVAL,
+            'LOCATION_BATCH_INTERVAL': config.LOCATION_BATCH_INTERVAL,
+            'LOCATION_GPS_PORT': config.LOCATION_GPS_PORT,
+            'LOCATION_GPS_BAUDRATE': config.LOCATION_GPS_BAUDRATE
+        }
+        
+        if location_service.initialize(location_config):
+            # Auto-start location tracking
+            await location_service.start()
+            print(f"📍 Location tracking enabled")
+            print(f"   Device ID: {config.LOCATION_DEVICE_ID}")
+            print(f"   GPS Port: {config.LOCATION_GPS_PORT}")
+            print(f"   Update interval: {config.LOCATION_UPDATE_INTERVAL}s")
+            print(f"   Batch interval: {config.LOCATION_BATCH_INTERVAL}s")
+        else:
+            print(f"⚠️  Location service initialization failed")
+            location_service = None
+    else:
+        print("⏸️  Location tracking disabled (set LOCATION_ENABLED=True to enable)")
+    
     print(f"🎯 Service ready for user: {USER_ID}")
     print("=" * 60)
     
@@ -324,6 +357,10 @@ async def lifespan(app: FastAPI):
     # Stop Medication service if running
     if medication_service and medication_service.is_running:
         await medication_service.stop()
+    
+    # Stop Location service if running
+    if location_service and location_service.is_running:
+        await location_service.stop()
     
     print("=" * 60)
 
@@ -355,6 +392,7 @@ app.include_router(stt.router)
 app.include_router(timelapse.router)
 app.include_router(accelerometer.router)
 app.include_router(medications.router)
+app.include_router(location.router)
 
 
 @app.get("/")
@@ -377,7 +415,8 @@ async def root():
             "AI Vision Assistant (OpenAI GPT-4o with Camera)",
             "Timelapse Recording (15-min segments, Auto-upload to S3)",
             "Fall Detection (MPU6050 Accelerometer with Voice Confirmation)",
-            "Medication Reminders (TTS + OLED)"
+            "Medication Reminders (TTS + OLED)",
+            "Location Tracking (Neo-6M GPS with Lambda Upload)"
         ]
     }
 

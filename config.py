@@ -138,3 +138,14 @@ MEDICATION_CHECK_INTERVAL: Final[int] = 60  # Check for due medications every 60
 MEDICATION_TTS_REMINDER: Final[str] = "Time to take your medication."
 MEDICATION_OLED_REMINDER: Final[str] = "Medication\nTime!"
 
+# ============================================================================
+# Location Tracking Configuration (Neo-6M GPS)
+# ============================================================================
+LOCATION_ENABLED: Final[bool] = True  # Enable location tracking
+LOCATION_DEVICE_ID: Final[str] = "d_123"  # Device identifier for location tracking
+LOCATION_UPDATE_INTERVAL: Final[int] = 1  # Read GPS location every 1 second
+LOCATION_BATCH_INTERVAL: Final[int] = 10  # Send batch to Lambda every 10 seconds
+LOCATION_LAMBDA_URL: Final[str] = os.getenv("LAMBDA_API_URL", "")  # Lambda API Gateway URL
+LOCATION_GPS_PORT: Final[str] = "/dev/ttyAMA0"  # Serial port for Neo-6M GPS (default UART on Pi)
+LOCATION_GPS_BAUDRATE: Final[int] = 9600  # GPS baud rate (9600 is standard for Neo-6M)
+
