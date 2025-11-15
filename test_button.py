@@ -29,7 +29,7 @@ async def main():
     button_service = get_button_service()
     
     # Initialize
-    if not button_service.initialize(button_pin=button_pin, pull_up=True, debounce_ms=50):
+    if not button_service.initialize(button_pin=button_pin, pull_up=True, bounce_time=0.05):
         print("❌ Failed to initialize button service")
         return 1
     
