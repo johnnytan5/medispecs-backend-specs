@@ -120,8 +120,13 @@ class ButtonService:
             # Set up button press handler
             self.button.when_pressed = self._on_button_pressed
             
+            # Test button state
+            current_state = "HIGH" if self.button.is_pressed else "LOW"
             print(f"✅ GPIO pin {self.button_pin} configured for button input")
+            print(f"   Current button state: {current_state}")
+            print(f"   Expected: HIGH (not pressed) with pull_up=True")
             print(f"🔘 Button detection started on GPIO {self.button_pin}")
+            print(f"   Press the button to test...")
             
             self.is_running = True
             
@@ -154,18 +159,44 @@ class ButtonService:
     def _on_button_pressed(self):
         """Handle button press event (called by gpiozero)"""
         # This runs in a separate thread from gpiozero
-        # We need to schedule the async handler
+        # Always log synchronously first (works from any thread)
         if self.is_running:
-            # Create task to handle async callback
+            self._handle_button_press_sync()
+            
+            # Then try to call async callback if set
+            if self.button_callback and asyncio.iscoroutinefunction(self.button_callback):
+                try:
+                    # Try to get the running event loop
+                    loop = asyncio.get_running_loop()
+                    # Schedule async callback
+                    asyncio.run_coroutine_threadsafe(self.button_callback(), loop)
+                except RuntimeError:
+                    # No running loop, can't call async callback
+                    print("⚠️  Cannot call async callback (no event loop)")
+                except Exception as e:
+                    print(f"⚠️  Button async callback error: {e}")
+    
+    def _handle_button_press_sync(self):
+        """Handle button press event (synchronous fallback)"""
+        self.press_count += 1
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        
+        # Log to console (force flush to ensure it appears immediately)
+        print(f"\n{'='*60}", flush=True)
+        print(f"🔘 BUTTON PRESSED!", flush=True)
+        print(f"   Timestamp: {timestamp}", flush=True)
+        print(f"   GPIO Pin: {self.button_pin}", flush=True)
+        print(f"   Total Presses: {self.press_count}", flush=True)
+        print(f"{'='*60}\n", flush=True)
+        
+        # Call sync callback if set
+        if self.button_callback and not asyncio.iscoroutinefunction(self.button_callback):
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.create_task(self._handle_button_press())
-                else:
-                    loop.run_until_complete(self._handle_button_press())
-            except RuntimeError:
-                # If no event loop, create a new one
-                asyncio.run(self._handle_button_press())
+                self.button_callback()
+            except Exception as e:
+                print(f"⚠️  Button callback error: {e}")
+                import traceback
+                traceback.print_exc()
     
     async def _handle_button_press(self):
         """Handle button press event (async)"""
