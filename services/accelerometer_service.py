@@ -57,7 +57,7 @@ class AccelerometerService:
         self.sampling_interval = 0.02  # seconds (1/50 = 0.02)
         
         # Fall detection thresholds
-        self.free_fall_threshold = 0.4  # G
+        self.free_fall_threshold = 1.0  # 
         self.impact_threshold = 2.3  # G
         self.inactivity_duration = 5.0  # seconds
         self.cooldown_period = 20  # seconds
