@@ -6,11 +6,12 @@ Handles displaying reminder messages on OLED screen
 from time import sleep
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
+import threading
 from typing import Optional
 
 
 class OLEDDisplayService:
-    """Service for displaying messages on OLED screen"""
+    """Service for displaying messages on OLED screen with retry and recovery"""
     
     def __init__(self, device=None):
         """
@@ -21,29 +22,124 @@ class OLEDDisplayService:
         """
         self.device = device
         self._initialized = False
+        self._init_attempts = 0
+        self._max_init_retries = 3
+        self._init_lock = threading.Lock()  # Prevent concurrent initialization
         
         if device is None:
+            self._try_initialize()
+        else:
+            self._initialized = True
+    
+    def _cleanup_device(self):
+        """Clean up and close existing OLED device connection"""
+        if self.device is not None:
+            try:
+                # Try to clear and close the device
+                try:
+                    self.device.clear()
+                except:
+                    pass
+                
+                # Close the underlying I2C connection if possible
+                if hasattr(self.device, '_serial') and self.device._serial is not None:
+                    try:
+                        # Some I2C interfaces have a cleanup method
+                        if hasattr(self.device._serial, 'cleanup'):
+                            self.device._serial.cleanup()
+                    except:
+                        pass
+                
+                # Small delay to let I2C bus settle
+                sleep(0.1)
+                
+            except Exception as e:
+                # Ignore cleanup errors
+                pass
+            finally:
+                self.device = None
+    
+    def _try_initialize(self, retry: bool = False):
+        """
+        Try to initialize OLED device with retry logic
+        
+        Args:
+            retry: If True, this is a retry attempt (don't increment counter)
+        """
+        # Use lock to prevent concurrent initialization
+        with self._init_lock:
+            if not retry:
+                self._init_attempts = 0
+            
+            if self._init_attempts >= self._max_init_retries:
+                print(f"⚠️  OLED initialization failed after {self._max_init_retries} attempts")
+                print(f"   (OLED messages will be printed to terminal for debugging)")
+                self._initialized = False
+                return
+            
+            # Clean up existing device before creating new one
+            if self.device is not None:
+                print("🧹 Cleaning up existing OLED connection...")
+                self._cleanup_device()
+            
             try:
                 from oled_device import get_device
-                self.device = get_device()
+                self._init_attempts += 1
+                self.device = get_device(max_retries=3, retry_delay=0.5)
                 self._initialized = True
-                print("✓ OLED display initialized successfully")
+                if self._init_attempts == 1:
+                    print("✅ OLED display initialized successfully")
+                else:
+                    print(f"✅ OLED display re-initialized successfully (attempt {self._init_attempts})")
+                # Reset counter on success
+                self._init_attempts = 0
             except ImportError:
                 print(f"⚠️  OLED hardware library not available - running in console-only mode")
                 print(f"   (On Raspberry Pi, install: pip install luma.oled)")
                 print(f"   (OLED messages will be printed to terminal for debugging)")
                 self._initialized = False
             except Exception as e:
-                print(f"⚠️  OLED hardware initialization failed: {str(e)}")
-                print(f"   (OLED messages will be printed to terminal for debugging)")
+                if self._init_attempts < self._max_init_retries:
+                    print(f"⚠️  OLED initialization attempt {self._init_attempts} failed: {str(e)}")
+                    print(f"   Will retry on next operation...")
+                else:
+                    print(f"⚠️  OLED hardware initialization failed after {self._max_init_retries} attempts: {str(e)}")
+                    print(f"   (OLED messages will be printed to terminal for debugging)")
                 self._initialized = False
-        else:
-            self._initialized = True
+                # Ensure device is None on failure
+                self.device = None
+    
+    def _ensure_connection(self):
+        """
+        Ensure OLED device is connected and working.
+        Re-initializes if connection is lost.
+        """
+        if self._initialized and self.device is not None:
+            # Test connection with a simple operation
+            try:
+                # Try to get device dimensions (lightweight operation)
+                _ = self.device.width
+                return True
+            except Exception:
+                # Connection lost, clean up and try to re-initialize
+                print("⚠️  OLED connection lost, attempting to reconnect...")
+                self._initialized = False
+                self._cleanup_device()
+                # Small delay before reconnecting to let I2C bus settle
+                sleep(0.2)
+        
+        if not self._initialized:
+            self._try_initialize(retry=True)
+        
+        return self._initialized
     
     @property
     def is_available(self) -> bool:
-        """Check if OLED display is available"""
-        return self._initialized and self.device is not None
+        """Check if OLED display is available (with connection check)"""
+        if not self._initialized or self.device is None:
+            return False
+        # Verify connection is still working
+        return self._ensure_connection()
     
     def get_text_size(self, draw, text, font):
         """Get text size compatible with both old and new Pillow versions."""
@@ -71,30 +167,41 @@ class OLEDDisplayService:
     
     def blink_display(self, image, blinks=5, on_time=0.3, off_time=0.3):
         """Create a blinking effect by alternating between image and blank screen."""
-        if not self.is_available:
+        if not self._ensure_connection():
             return
         
-        blank = Image.new("1", (self.device.width, self.device.height))
-        
-        for _ in range(blinks):
+        try:
+            blank = Image.new("1", (self.device.width, self.device.height))
+            
+            for _ in range(blinks):
+                self.device.display(image)
+                sleep(on_time)
+                self.device.display(blank)
+                sleep(off_time)
+            
             self.device.display(image)
-            sleep(on_time)
-            self.device.display(blank)
-            sleep(off_time)
-        
-        self.device.display(image)
+        except Exception as e:
+            print(f"⚠️  OLED display error during blink: {e}")
+            self._initialized = False
+            self.device = None
     
     def show_message(self, message, font=None, should_blink=True, display_time=10):
         """Display a centered message on the OLED screen with optional blinking."""
         # Always print to console for debugging
         print(f"📺 OLED Display: {message}")
         
-        if not self.is_available:
+        if not self._ensure_connection():
             print(f"⚠️  OLED hardware not available (showing in console only)")
             return
         
-        width = self.device.width
-        height = self.device.height
+        try:
+            width = self.device.width
+            height = self.device.height
+        except Exception as e:
+            print(f"⚠️  OLED connection error: {e}")
+            self._initialized = False
+            self.device = None
+            return
         
         image = Image.new("1", (width, height))
         draw = ImageDraw.Draw(image)
@@ -108,16 +215,21 @@ class OLEDDisplayService:
         draw.text((x, y), message, font=font, fill=255)
         blank = Image.new("1", (width, height))
         
-        if should_blink:
-            self.blink_display(image)
-        else:
-            self.device.display(image)
-        
-        sleep(display_time)
         try:
-            self.device.clear()
-        except Exception:
-            self.device.display(blank)
+            if should_blink:
+                self.blink_display(image)
+            else:
+                self.device.display(image)
+            
+            sleep(display_time)
+            try:
+                self.device.clear()
+            except Exception:
+                self.device.display(blank)
+        except Exception as e:
+            print(f"⚠️  OLED display error: {e}")
+            self._initialized = False
+            self.device = None
     
     def display_wrapped_message(self, message, max_chars_per_line=16, font=None, 
                                should_blink=True, display_time=10):
@@ -125,12 +237,18 @@ class OLEDDisplayService:
         # Always print to console for debugging
         print(f"📺 OLED Display (wrapped): {message}")
         
-        if not self.is_available:
+        if not self._ensure_connection():
             print(f"⚠️  OLED hardware not available (showing in console only)")
             return
         
-        width = self.device.width
-        height = self.device.height
+        try:
+            width = self.device.width
+            height = self.device.height
+        except Exception as e:
+            print(f"⚠️  OLED connection error: {e}")
+            self._initialized = False
+            self.device = None
+            return
         image = Image.new("1", (width, height))
         draw = ImageDraw.Draw(image)
         if font is None:
@@ -148,28 +266,40 @@ class OLEDDisplayService:
         
         blank = Image.new("1", (width, height))
         
-        if should_blink:
-            self.blink_display(image)
-        else:
-            self.device.display(image)
-        
-        sleep(display_time)
         try:
-            self.device.clear()
-        except Exception:
-            self.device.display(blank)
+            if should_blink:
+                self.blink_display(image)
+            else:
+                self.device.display(image)
+            
+            sleep(display_time)
+            try:
+                self.device.clear()
+            except Exception:
+                self.device.display(blank)
+        except Exception as e:
+            print(f"⚠️  OLED display error: {e}")
+            self._initialized = False
+            self.device = None
     
     def display_scrolling_message(self, message, pause=1.0, step=1, delay=0.03, font=None):
         """Scroll the message upwards across the display."""
         # Always print to console for debugging
         print(f"📺 OLED Display (scrolling): {message}")
         
-        if not self.is_available:
+        if not self._ensure_connection():
             print(f"⚠️  OLED hardware not available (showing in console only)")
             return
         
-        width = self.device.width
-        height = self.device.height
+        try:
+            width = self.device.width
+            height = self.device.height
+        except Exception as e:
+            print(f"⚠️  OLED connection error: {e}")
+            self._initialized = False
+            self.device = None
+            return
+        
         line_spacing = 1.2
         
         if font is None:
@@ -219,13 +349,23 @@ class OLEDDisplayService:
                 sleep(delay)
         except KeyboardInterrupt:
             return
+        except Exception as e:
+            print(f"⚠️  OLED display error during scrolling: {e}")
+            self._initialized = False
+            self.device = None
+            return
         
         sleep(pause)
         try:
-            self.device.clear()
-        except Exception:
-            blank = Image.new("1", (width, height))
-            self.device.display(blank)
+            try:
+                self.device.clear()
+            except Exception:
+                blank = Image.new("1", (width, height))
+                self.device.display(blank)
+        except Exception as e:
+            print(f"⚠️  OLED clear error: {e}")
+            self._initialized = False
+            self.device = None
     
     def display_reminder(self, message, font_size=14, should_blink=True, display_time=10):
         """
@@ -241,7 +381,7 @@ class OLEDDisplayService:
         # Always print to console for debugging
         print(f"🔔 OLED Reminder: {message} (blink={should_blink}, duration={display_time}s)")
         
-        if not self.is_available:
+        if not self._ensure_connection():
             print(f"⚠️  OLED hardware not available (showing in console only)")
             return
         
@@ -249,10 +389,16 @@ class OLEDDisplayService:
             message = ""
         
         try:
-            self.device.clear()
-        except Exception:
-            blank = Image.new("1", (self.device.width, self.device.height))
-            self.device.display(blank)
+            try:
+                self.device.clear()
+            except Exception:
+                blank = Image.new("1", (self.device.width, self.device.height))
+                self.device.display(blank)
+        except Exception as e:
+            print(f"⚠️  OLED connection error: {e}")
+            self._initialized = False
+            self.device = None
+            return
         
         font = self.get_preferred_font(size=font_size)
         
@@ -283,14 +429,19 @@ class OLEDDisplayService:
         """Clear the OLED display"""
         print(f"🧹 OLED Display: Cleared")
         
-        if not self.is_available:
+        if not self._ensure_connection():
             return
         
         try:
             self.device.clear()
-        except Exception:
-            blank = Image.new("1", (self.device.width, self.device.height))
-            self.device.display(blank)
+        except Exception as e:
+            try:
+                blank = Image.new("1", (self.device.width, self.device.height))
+                self.device.display(blank)
+            except Exception:
+                print(f"⚠️  OLED clear error: {e}")
+                self._initialized = False
+                self.device = None
 
 
 # Global instance

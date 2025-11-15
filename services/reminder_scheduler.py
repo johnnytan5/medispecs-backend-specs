@@ -132,10 +132,10 @@ class ReminderScheduler:
                         asyncio.create_task(
                             asyncio.to_thread(
                                 oled.display_reminder,
-                                message=display_message,
-                                font_size=14,
-                                should_blink=True,
-                                display_time=10
+                            message=display_message,
+                            font_size=14,
+                            should_blink=True,
+                            display_time=10
                             )
                         )
                     except Exception as e:
