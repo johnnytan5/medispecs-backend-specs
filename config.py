@@ -62,12 +62,12 @@ STT_DEVICE_INDEX: Optional[int] = None  # Audio device index (None = default, or
 BUTTON_ENABLED: Final[bool] = True  # Enable button-triggered STT
 BUTTON_GPIO_PIN: Final[int] = 17  # GPIO pin for button (BCM numbering)
 BUTTON_PULL_UP: Final[bool] = True  # Pull-up resistor (button to GND when pressed)
-BUTTON_BOUNCE_TIME: Final[float] = 0.05  # Button bounce time in seconds (50ms)
+BUTTON_BOUNCE_TIME: Final[float] = 0.01  # Button bounce time in seconds (50ms)
 
 # LLM Configuration (OpenAI GPT for voice command processing)
 LLM_ENABLED: Final[bool] = True  # Enable LLM for processing voice commands
 LLM_API_KEY: Final[str] = os.getenv("OPENAI_API_KEY", "")  # OpenAI API key from .env
-LLM_MODEL: Final[str] = "gpt-3.5-turbo"  # Model: gpt-3.5-turbo (fast, cheap) or gpt-4 (best quality)
+LLM_MODEL: Final[str] = "gpt-4.0"  # Model: gpt-3.5-turbo (fast, cheap) or gpt-4 (best quality)
 LLM_SYSTEM_PROMPT: Final[str] = (
     "You are Ruby, a helpful voice assistant for senior citizens. "
     "Be friendly, clear, and concise, super concise, and avoid using hard jargons and vocabularies, use easy words. "
