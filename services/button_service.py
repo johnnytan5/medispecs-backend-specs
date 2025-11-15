@@ -1,20 +1,21 @@
 """
 Button Service - Simple Button Press Detection
 Detects button presses on GPIO pin and logs to console
+Uses gpiozero (more reliable than RPi.GPIO)
 """
 import asyncio
 import time
 from datetime import datetime
 from typing import Optional, Callable, Dict, Any
 
-# Try to import RPi.GPIO
+# Try to import gpiozero
 try:
-    import RPi.GPIO as GPIO
-    GPIO_AVAILABLE = True
+    from gpiozero import Button
+    GPIOZERO_AVAILABLE = True
 except ImportError:
-    GPIO_AVAILABLE = False
-    print("⚠️  RPi.GPIO not installed. Button detection will be disabled.")
-    print("   Install with: pip install RPi.GPIO")
+    GPIOZERO_AVAILABLE = False
+    print("⚠️  gpiozero not installed. Button detection will be disabled.")
+    print("   Install with: pip install gpiozero")
 
 
 class ButtonService:
@@ -24,7 +25,7 @@ class ButtonService:
     Features:
     - Detects button presses on GPIO pin
     - Logs presses to console with timestamp
-    - Debouncing to prevent multiple triggers
+    - Built-in debouncing via gpiozero
     - Optional callback function for button press events
     """
     
@@ -45,39 +46,41 @@ class ButtonService:
         
         # Configuration
         self.button_pin = 18  # Default GPIO pin (BCM numbering)
-        self.pull_up_down = GPIO.PUD_UP  # Pull-up resistor (button connects to GND when pressed)
-        self.debounce_time = 0.05  # 50ms debounce time
+        self.pull_up = True  # Pull-up resistor (button connects to GND when pressed)
+        self.bounce_time = 0.05  # 50ms bounce time (debounce)
+        
+        # gpiozero Button object
+        self.button: Optional[Button] = None
         
         # State tracking
-        self.last_press_time = 0
         self.press_count = 0
         self.button_callback: Optional[Callable] = None
     
-    def initialize(self, button_pin: int = 18, pull_up: bool = True, debounce_ms: int = 50) -> bool:
+    def initialize(self, button_pin: int = 18, pull_up: bool = True, bounce_time: float = 0.05) -> bool:
         """
         Initialize button service with configuration
         
         Args:
             button_pin: GPIO pin number (BCM numbering, default: 18)
             pull_up: True for pull-up (button to GND), False for pull-down (button to 3.3V)
-            debounce_ms: Debounce time in milliseconds (default: 50ms)
+            bounce_time: Bounce time in seconds (default: 0.05 = 50ms)
         
         Returns:
             bool: True if initialization successful, False otherwise
         """
-        if not GPIO_AVAILABLE:
+        if not GPIOZERO_AVAILABLE:
             print("❌ Button service dependencies not available")
             return False
         
         try:
             self.button_pin = button_pin
-            self.pull_up_down = GPIO.PUD_UP if pull_up else GPIO.PUD_DOWN
-            self.debounce_time = debounce_ms / 1000.0  # Convert to seconds
+            self.pull_up = pull_up
+            self.bounce_time = bounce_time
             
             print(f"✅ Button service initialized")
             print(f"   GPIO Pin: {self.button_pin} (BCM)")
             print(f"   Pull-up: {pull_up}")
-            print(f"   Debounce: {debounce_ms}ms")
+            print(f"   Bounce time: {bounce_time*1000:.0f}ms")
             
             return True
             
@@ -98,29 +101,37 @@ class ButtonService:
     
     async def start(self):
         """Start button detection service"""
-        if not GPIO_AVAILABLE:
-            print("⏸️  Button detection disabled (RPi.GPIO not available)")
+        if not GPIOZERO_AVAILABLE:
+            print("⏸️  Button detection disabled (gpiozero not available)")
             return
         
         if self.is_running:
             print("⚠️  Button detection is already running")
             return
         
-        # Setup GPIO
+        # Create gpiozero Button object
         try:
-            GPIO.setmode(GPIO.BCM)  # Use BCM pin numbering
-            GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=self.pull_up_down)
+            self.button = Button(
+                self.button_pin,
+                pull_up=self.pull_up,
+                bounce_time=self.bounce_time
+            )
+            
+            # Set up button press handler
+            self.button.when_pressed = self._on_button_pressed
+            
             print(f"✅ GPIO pin {self.button_pin} configured for button input")
+            print(f"🔘 Button detection started on GPIO {self.button_pin}")
+            
+            self.is_running = True
+            
         except Exception as e:
             print(f"❌ Failed to setup GPIO: {e}")
+            print(f"   Make sure:")
+            print(f"   1. GPIO pin {self.button_pin} is not in use by another process")
+            print(f"   2. You have permission to access GPIO (may need sudo or gpio group)")
+            print(f"   3. Button is wired correctly")
             return
-        
-        self.is_running = True
-        
-        # Start button monitoring task
-        self.button_task = asyncio.create_task(self._button_monitor_loop())
-        
-        print(f"🔘 Button detection started on GPIO {self.button_pin}")
     
     async def stop(self):
         """Stop button detection service"""
@@ -129,65 +140,35 @@ class ButtonService:
         
         self.is_running = False
         
-        # Cancel task
-        if self.button_task:
-            self.button_task.cancel()
+        # Close button
+        if self.button:
             try:
-                await self.button_task
-            except asyncio.CancelledError:
+                self.button.close()
+                print(f"🔘 GPIO pin {self.button_pin} closed")
+            except:
                 pass
-        
-        # Cleanup GPIO
-        try:
-            GPIO.cleanup(self.button_pin)
-            print(f"🔘 GPIO pin {self.button_pin} cleaned up")
-        except:
-            pass
+            self.button = None
         
         print("🛑 Button detection stopped")
     
-    async def _button_monitor_loop(self):
-        """Continuously monitor button state"""
-        print("🔘 Button monitoring loop started")
-        
-        # Track previous state for edge detection
-        last_state = None
-        
-        while self.is_running:
+    def _on_button_pressed(self):
+        """Handle button press event (called by gpiozero)"""
+        # This runs in a separate thread from gpiozero
+        # We need to schedule the async handler
+        if self.is_running:
+            # Create task to handle async callback
             try:
-                # Read button state (non-blocking)
-                current_state = await asyncio.to_thread(GPIO.input, self.button_pin)
-                
-                # Detect button press (falling edge for pull-up, rising edge for pull-down)
-                if self.pull_up_down == GPIO.PUD_UP:
-                    # Pull-up: button pressed when state goes LOW (0)
-                    button_pressed = (current_state == GPIO.LOW)
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self._handle_button_press())
                 else:
-                    # Pull-down: button pressed when state goes HIGH (1)
-                    button_pressed = (current_state == GPIO.HIGH)
-                
-                # Detect edge (state change)
-                if button_pressed and last_state != button_pressed:
-                    # Debounce check
-                    current_time = time.time()
-                    if current_time - self.last_press_time > self.debounce_time:
-                        # Button press detected!
-                        await self._handle_button_press()
-                        self.last_press_time = current_time
-                
-                last_state = button_pressed
-                
-                # Small delay to avoid CPU spinning
-                await asyncio.sleep(0.01)  # 10ms polling interval
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                print(f"❌ Error in button monitor loop: {e}")
-                await asyncio.sleep(0.1)
+                    loop.run_until_complete(self._handle_button_press())
+            except RuntimeError:
+                # If no event loop, create a new one
+                asyncio.run(self._handle_button_press())
     
     async def _handle_button_press(self):
-        """Handle button press event"""
+        """Handle button press event (async)"""
         self.press_count += 1
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         
@@ -209,6 +190,8 @@ class ButtonService:
                     await asyncio.to_thread(self.button_callback)
             except Exception as e:
                 print(f"⚠️  Button callback error: {e}")
+                import traceback
+                traceback.print_exc()
     
     def get_status(self) -> Dict[str, Any]:
         """Get button service status"""
@@ -216,7 +199,6 @@ class ButtonService:
             'is_running': self.is_running,
             'button_pin': self.button_pin,
             'press_count': self.press_count,
-            'last_press_time': self.last_press_time if self.last_press_time > 0 else None
         }
 
 
@@ -229,4 +211,3 @@ def get_button_service() -> ButtonService:
     if _button_service is None:
         _button_service = ButtonService()
     return _button_service
-
