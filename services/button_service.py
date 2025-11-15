@@ -164,17 +164,32 @@ class ButtonService:
             self._handle_button_press_sync()
             
             # Then try to call async callback if set
-            if self.button_callback and asyncio.iscoroutinefunction(self.button_callback):
+            if self.button_callback:
                 try:
-                    # Try to get the running event loop
-                    loop = asyncio.get_running_loop()
-                    # Schedule async callback
-                    asyncio.run_coroutine_threadsafe(self.button_callback(), loop)
-                except RuntimeError:
-                    # No running loop, can't call async callback
-                    print("⚠️  Cannot call async callback (no event loop)")
+                    # Check if callback is async
+                    if asyncio.iscoroutinefunction(self.button_callback):
+                        # Try to get the running event loop
+                        try:
+                            loop = asyncio.get_running_loop()
+                            # Schedule async callback in the running loop
+                            asyncio.run_coroutine_threadsafe(self.button_callback(), loop)
+                        except RuntimeError:
+                            # No running loop in this thread, try to get main loop
+                            try:
+                                loop = asyncio.get_event_loop()
+                                if loop.is_running():
+                                    asyncio.run_coroutine_threadsafe(self.button_callback(), loop)
+                                else:
+                                    loop.run_until_complete(self.button_callback())
+                            except:
+                                print("⚠️  Cannot call async callback (no event loop available)")
+                    else:
+                        # Sync callback, call directly
+                        self.button_callback()
                 except Exception as e:
-                    print(f"⚠️  Button async callback error: {e}")
+                    print(f"⚠️  Button callback error: {e}")
+                    import traceback
+                    traceback.print_exc()
     
     def _handle_button_press_sync(self):
         """Handle button press event (synchronous fallback)"""

@@ -40,29 +40,30 @@ class STTService:
         self.sample_rate = 16000
         self.device_index = None
         
-        # Wake word settings
-        self.wake_word = "hey ruby"  # Text-only conversation
-        self.vision_wake_word = "watch ruby"  # Vision-based conversation
-        self.wake_word_detected = False
-        self.vision_wake_word_detected = False
-        self.command_timeout = 5  # seconds to record command
+        # Button-triggered listening settings
+        self.command_timeout = 10  # seconds to record command after button press
+        self.is_listening_active = False  # Flag to prevent multiple simultaneous listening sessions
         
         # Pause flag (for fall confirmation or other interruptions)
-        self.paused = False  # When True, wake word detection is temporarily disabled
+        self.paused = False  # When True, listening is temporarily disabled
         
         # Callbacks for integration
         self.on_wake_word_callback: Optional[Callable] = None
         self.on_command_callback: Optional[Callable] = None
         
-    def initialize(self, model_path: str, device_index: Optional[int] = None):
+    def initialize(self, model_path: str, device_index: Optional[int] = None, command_timeout: int = 10):
         """
         Initialize Vosk model and audio device
         
         Args:
             model_path: Path to Vosk model directory (e.g., "vosk-model-en-us-0.22")
             device_index: Audio device index (None = default)
+            command_timeout: Seconds to record command after button press (default: 10)
         """
         print("🎤 Initializing Speech-to-Text service...")
+        
+        # Set command timeout
+        self.command_timeout = command_timeout
         
         try:
             from vosk import Model, KaldiRecognizer
@@ -106,8 +107,9 @@ class STTService:
             print(f"   Sample rate: {self.sample_rate} Hz")
             
             print("✅ Speech-to-Text initialized successfully")
-            print(f"   Wake word: '{self.wake_word}'")
+            print(f"   Mode: Button-triggered (no continuous wake word listening)")
             print(f"   Command timeout: {self.command_timeout}s")
+            print(f"   Ready for button-triggered listening")
             return True
             
         except ImportError as e:
@@ -142,19 +144,16 @@ class STTService:
             return []
     
     async def start(self):
-        """Start the STT service (continuous wake word detection)"""
-        if self.is_running:
-            print("⚠️  STT service is already running")
-            return
-        
+        """Initialize STT service (no continuous listening - button-triggered only)"""
         if not self.model:
             print("❌ STT not initialized. Call initialize() first")
             return
         
+        # STT is initialized and ready, but not continuously listening
+        # Listening will be triggered by button press
         self.is_running = True
-        self.task = asyncio.create_task(self._listening_loop())
-        
-        print("▶️  STT service started - listening for wake word...")
+        print("✅ STT service ready (button-triggered mode)")
+        print("   Waiting for button press to start listening...")
     
     async def stop(self):
         """Stop the STT service"""
@@ -162,6 +161,7 @@ class STTService:
             return
         
         self.is_running = False
+        self.is_listening_active = False
         
         if self.task:
             self.task.cancel()
@@ -172,6 +172,47 @@ class STTService:
         
         print("⏹️  STT service stopped")
     
+    async def listen_on_button_press(self):
+        """
+        Start listening for command when button is pressed
+        Records for command_timeout seconds, transcribes, and sends to LLM
+        """
+        if not self.model:
+            print("❌ STT not initialized")
+            return
+        
+        if self.is_listening_active:
+            print("⚠️  Already listening, ignoring button press")
+            return
+        
+        if self.paused:
+            print("⚠️  STT is paused (e.g., during fall confirmation)")
+            return
+        
+        print(f"\n{'='*60}")
+        print(f"🔘 BUTTON PRESSED - Starting voice listening")
+        print(f"{'='*60}")
+        
+        self.is_listening_active = True
+        
+        try:
+            # Record command immediately (no greeting)
+            command = await self._record_command()
+            
+            # Process text command with LLM
+            if command:
+                await self._handle_text_command(command)
+            else:
+                print("⚠️  No command detected")
+            
+        except Exception as e:
+            print(f"❌ Error during button-triggered listening: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            self.is_listening_active = False
+            print(f"{'='*60}\n")
+    
     def _audio_callback(self, indata, frames, time_info, status):
         """Callback for audio stream (runs in separate thread)"""
         if status:
@@ -179,148 +220,6 @@ class STTService:
         
         # Add audio data to queue
         self.audio_queue.put(bytes(indata))
-    
-    async def _listening_loop(self):
-        """Main listening loop - continuously listens for wake word"""
-        print("🔄 STT listening loop started")
-        
-        try:
-            import sounddevice as sd
-            
-            # Start audio stream
-            with sd.RawInputStream(
-                samplerate=self.sample_rate,
-                blocksize=8000,
-                dtype='int16',
-                channels=1,
-                callback=self._audio_callback
-            ):
-                print(f"🎧 Listening for '{self.wake_word}' or '{self.vision_wake_word}'...")
-                self.is_listening = True
-                
-                while self.is_running:
-                    try:
-                        # Get audio data from queue
-                        data = self.audio_queue.get(timeout=1)
-                        
-                        # Process with Vosk
-                        if self.recognizer.AcceptWaveform(data):
-                            result = json.loads(self.recognizer.Result())
-                            text = result.get('text', '').lower().strip()
-                            
-                            if text:
-                                # Log all transcribed text with timestamp
-                                import time
-                                timestamp = time.strftime("%H:%M:%S")
-                                print(f"🎤 [{timestamp}] [TRANSCRIBED] '{text}'")
-                                
-                                # Skip wake word detection if paused (e.g., during fall confirmation)
-                                if self.paused:
-                                    continue
-                                
-                                # Check for vision wake word first (more specific)
-                                if not self.vision_wake_word_detected and not self.wake_word_detected and self.vision_wake_word in text:
-                                    print(f"\n" + "="*60)
-                                    print(f"👁️  VISION WAKE WORD DETECTED: '{self.vision_wake_word}'")
-                                    print(f"="*60)
-                                    self.vision_wake_word_detected = True
-                                    
-                                    # Respond with TTS greeting for vision
-                                    await self._respond_to_vision_wake_word()
-                                    
-                                    # Record command
-                                    command = await self._record_command()
-                                    
-                                    # Process vision command
-                                    if command:
-                                        await self._handle_vision_command(command)
-                                    
-                                    # Reset for next wake word
-                                    self.vision_wake_word_detected = False
-                                    print(f"\n🎧 Listening for '{self.wake_word}' or '{self.vision_wake_word}'...")
-                                    print("="*60 + "\n")
-                                
-                                # Check for text wake word
-                                elif not self.wake_word_detected and not self.vision_wake_word_detected and self.wake_word in text:
-                                    print(f"\n" + "="*60)
-                                    print(f"🔔 WAKE WORD DETECTED: '{self.wake_word}'")
-                                    print(f"="*60)
-                                    self.wake_word_detected = True
-                                    
-                                    # Respond with TTS greeting
-                                    await self._respond_to_wake_word()
-                                    
-                                    # Callback notification
-                                    if self.on_wake_word_callback:
-                                        try:
-                                            await self.on_wake_word_callback()
-                                        except:
-                                            pass
-                                    
-                                    # Record command
-                                    command = await self._record_command()
-                                    
-                                    # Process text command with LLM
-                                    if command:
-                                        await self._handle_text_command(command)
-                                    
-                                    # Reset for next wake word
-                                    self.wake_word_detected = False
-                                    print(f"\n🎧 Listening for '{self.wake_word}' or '{self.vision_wake_word}'...")
-                                    print("="*60 + "\n")
-                        
-                        # Allow other tasks to run
-                        await asyncio.sleep(0.01)
-                        
-                    except queue.Empty:
-                        # No audio data, continue
-                        await asyncio.sleep(0.1)
-                    
-                    except Exception as e:
-                        print(f"❌ Error in listening loop: {e}")
-                        await asyncio.sleep(1)
-        
-        except asyncio.CancelledError:
-            print("🔄 STT listening loop cancelled")
-        except Exception as e:
-            print(f"❌ Fatal error in listening loop: {e}")
-            import traceback
-            traceback.print_exc()
-        finally:
-            self.is_listening = False
-    
-    async def _respond_to_wake_word(self):
-        """Respond to wake word with TTS greeting"""
-        try:
-            from services.tts_service import get_tts_service
-            from config import TTS_ENABLED
-            
-            if TTS_ENABLED:
-                tts = get_tts_service()
-                if tts.is_available:
-                    greeting = "Hey, I am Ruby. How can I help you?"
-                    print(f"🔊 Ruby: '{greeting}'")
-                    
-                    # Speak greeting (fire-and-forget)
-                    asyncio.create_task(tts.speak_async(greeting))
-        except Exception as e:
-            print(f"⚠️  Could not speak greeting: {e}")
-    
-    async def _respond_to_vision_wake_word(self):
-        """Respond to vision wake word with TTS greeting"""
-        try:
-            from services.tts_service import get_tts_service
-            from config import TTS_ENABLED, VISION_GREETING
-            
-            if TTS_ENABLED:
-                tts = get_tts_service()
-                if tts.is_available:
-                    print(f"🔊 Ruby: '{VISION_GREETING}'")
-                    
-                    # Speak greeting (fire-and-forget)
-                    asyncio.create_task(tts.speak_async(VISION_GREETING))
-        except Exception as e:
-            print(f"⚠️  Could not speak vision greeting: {e}")
     
     async def _handle_text_command(self, command: str):
         """
@@ -347,75 +246,10 @@ class STTService:
             import traceback
             traceback.print_exc()
     
-    async def _handle_vision_command(self, command: str):
-        """
-        Handle vision command by capturing frame and processing with LLM vision
-        
-        Args:
-            command: Transcribed voice command from user
-        """
-        print(f"\n📸 Capturing camera frame for vision analysis...")
-        
-        try:
-            from services.face_detection_service import get_face_detection_service
-            from services.llm_service import get_llm_service
-            from config import (
-                LLM_ENABLED,
-                VISION_ENABLED,
-                VISION_MODEL,
-                VISION_SYSTEM_PROMPT,
-                VISION_FALLBACK_MESSAGE
-            )
-            
-            if not LLM_ENABLED or not VISION_ENABLED:
-                print("⚠️  Vision assistant disabled")
-                return
-            
-            # Get camera frame from face detection service
-            face_detector = get_face_detection_service()
-            
-            # Access shared frame
-            async with face_detector.frame_lock:
-                if face_detector.latest_frame is not None:
-                    # Copy frame (don't modify shared frame)
-                    image_frame = face_detector.latest_frame.copy()
-                    print(f"✅ Frame captured: {image_frame.shape}")
-                else:
-                    image_frame = None
-                    print("❌ No frame available from camera")
-            
-            # Check if frame is available
-            if image_frame is None:
-                # Speak fallback message
-                from services.tts_service import get_tts_service
-                from config import TTS_ENABLED
-                
-                if TTS_ENABLED:
-                    tts = get_tts_service()
-                    if tts.is_available:
-                        await tts.speak_async(VISION_FALLBACK_MESSAGE)
-                return
-            
-            # Process with LLM vision and speak response
-            llm = get_llm_service()
-            if llm.is_available:
-                await llm.process_vision_and_speak(
-                    image_frame,
-                    command,
-                    VISION_MODEL,
-                    VISION_SYSTEM_PROMPT
-                )
-            else:
-                print("⚠️  LLM not available for vision processing")
-                
-        except Exception as e:
-            print(f"❌ Error handling vision command: {e}")
-            import traceback
-            traceback.print_exc()
-    
     async def _record_command(self):
-        """Record and transcribe command after wake word detected"""
+        """Record and transcribe command after button press"""
         print(f"🎙️  Recording command (timeout: {self.command_timeout}s)...")
+        print(f"   (Speak now...)")
         
         # Clear recognizer state
         self.recognizer = None
@@ -429,39 +263,58 @@ class STTService:
             except:
                 break
         
-        # Record for timeout duration
-        start_time = time.time()
-        command_parts = []
+        # Start audio stream for recording
+        import sounddevice as sd
+        audio_stream = None
         
-        print("   (Speak now...)")
-        
-        while time.time() - start_time < self.command_timeout:
-            try:
-                data = self.audio_queue.get(timeout=0.5)
-                
-                # Get partial results for real-time feedback
-                partial_result = json.loads(self.recognizer.PartialResult())
-                partial_text = partial_result.get('partial', '')
-                if partial_text:
-                    print(f"   💬 Hearing: '{partial_text}'", end='\r')
-                
-                if self.recognizer.AcceptWaveform(data):
-                    result = json.loads(self.recognizer.Result())
-                    text = result.get('text', '').strip()
-                    if text:
-                        print(f"   ✓ Captured: '{text}'")
-                        command_parts.append(text)
-                
-                await asyncio.sleep(0.01)
-                
-            except queue.Empty:
-                continue
-        
-        # Get final result
-        final_result = json.loads(self.recognizer.FinalResult())
-        final_text = final_result.get('text', '').strip()
-        if final_text:
-            command_parts.append(final_text)
+        try:
+            # Start audio stream
+            audio_stream = sd.RawInputStream(
+                samplerate=self.sample_rate,
+                blocksize=8000,
+                dtype='int16',
+                channels=1,
+                callback=self._audio_callback
+            )
+            audio_stream.start()
+            
+            # Record for timeout duration
+            start_time = time.time()
+            command_parts = []
+            
+            while time.time() - start_time < self.command_timeout:
+                try:
+                    data = self.audio_queue.get(timeout=0.5)
+                    
+                    # Get partial results for real-time feedback
+                    partial_result = json.loads(self.recognizer.PartialResult())
+                    partial_text = partial_result.get('partial', '')
+                    if partial_text:
+                        print(f"   💬 Hearing: '{partial_text}'", end='\r')
+                    
+                    if self.recognizer.AcceptWaveform(data):
+                        result = json.loads(self.recognizer.Result())
+                        text = result.get('text', '').strip()
+                        if text:
+                            print(f"   ✓ Captured: '{text}'")
+                            command_parts.append(text)
+                    
+                    await asyncio.sleep(0.01)
+                    
+                except queue.Empty:
+                    continue
+            
+            # Get final result
+            final_result = json.loads(self.recognizer.FinalResult())
+            final_text = final_result.get('text', '').strip()
+            if final_text:
+                command_parts.append(final_text)
+            
+        finally:
+            # Stop audio stream
+            if audio_stream:
+                audio_stream.stop()
+                audio_stream.close()
         
         # Combine all parts
         full_command = ' '.join(command_parts).strip()

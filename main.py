@@ -26,7 +26,8 @@ from config import (
     TIMELAPSE_ENABLED,
     ACCELEROMETER_ENABLED,
     MEDICATION_ENABLED,
-    LOCATION_ENABLED
+    LOCATION_ENABLED,
+    BUTTON_ENABLED
 )
 import asyncio
 
@@ -100,12 +101,7 @@ async def lifespan(app: FastAPI):
         
         if llm_service.initialize(LLM_API_KEY, LLM_MODEL, LLM_SYSTEM_PROMPT):
             print(f"🤖 LLM enabled - Voice commands will be processed by {LLM_MODEL}")
-            
-            # Show vision status
-            if VISION_ENABLED:
-                print(f"👁️  Vision enabled - '{VISION_WAKE_WORD}' will use {VISION_MODEL}")
-            else:
-                print(f"⏸️  Vision disabled (set VISION_ENABLED=True to enable)")
+            print(f"   Note: Vision mode removed (button-triggered STT is text-only)")
         else:
             print(f"⚠️  LLM initialization failed (voice commands won't be processed)")
             print(f"   Add OPENAI_API_KEY to .env file")
@@ -117,17 +113,18 @@ async def lifespan(app: FastAPI):
     stt_service = None
     if STT_ENABLED:
         from services.stt_service import get_stt_service
+        import config
+        
         stt_service = get_stt_service()
         
         # Initialize with model
-        if stt_service.initialize(STT_MODEL_PATH, STT_DEVICE_INDEX):
+        if stt_service.initialize(STT_MODEL_PATH, STT_DEVICE_INDEX, config.STT_COMMAND_TIMEOUT):
             print(f"🎤 Speech-to-Text initialized")
+            print(f"   Mode: Button-triggered (no continuous wake word listening)")
+            print(f"   Command timeout: {config.STT_COMMAND_TIMEOUT}s")
             
-            # Start continuous listening for wake words
+            # Start STT service (ready but not continuously listening)
             await stt_service.start()
-            print(f"👂 Listening for wake words:")
-            print(f"   • '{stt_service.wake_word}' → Text conversation")
-            print(f"   • '{stt_service.vision_wake_word}' → Vision analysis")
         else:
             print(f"⚠️  Speech-to-Text initialization failed")
             print(f"   Download Vosk model from: https://alphacephei.com/vosk/models")
@@ -135,6 +132,40 @@ async def lifespan(app: FastAPI):
             stt_service = None
     else:
         print("⏸️  Speech-to-Text disabled (set STT_ENABLED=True to enable)")
+    
+    # Initialize Button service (for STT trigger) (if enabled)
+    button_service = None
+    if STT_ENABLED and config.BUTTON_ENABLED and stt_service:
+        from services.button_service import get_button_service
+        
+        button_service = get_button_service()
+        
+        # Initialize button
+        if button_service.initialize(
+            button_pin=config.BUTTON_GPIO_PIN,
+            pull_up=config.BUTTON_PULL_UP,
+            bounce_time=config.BUTTON_BOUNCE_TIME
+        ):
+            # Set callback to trigger STT listening
+            async def on_button_press():
+                """Callback when button is pressed - trigger STT listening"""
+                if stt_service and stt_service.is_running:
+                    await stt_service.listen_on_button_press()
+            
+            button_service.set_callback(on_button_press)
+            
+            # Start button monitoring
+            await button_service.start()
+            print(f"🔘 Button service enabled (GPIO {config.BUTTON_GPIO_PIN})")
+            print(f"   Press button to start voice listening")
+        else:
+            print(f"⚠️  Button service initialization failed")
+            button_service = None
+    else:
+        if not STT_ENABLED:
+            print("⏸️  Button service disabled (STT not enabled)")
+        elif not config.BUTTON_ENABLED:
+            print("⏸️  Button service disabled (set BUTTON_ENABLED=True to enable)")
     
     # Initialize Timelapse service (if enabled)
     timelapse_service = None
@@ -361,6 +392,10 @@ async def lifespan(app: FastAPI):
     # Stop Location service if running
     if location_service and location_service.is_running:
         await location_service.stop()
+    
+    # Stop Button service if running
+    if button_service and button_service.is_running:
+        await button_service.stop()
     
     print("=" * 60)
 
