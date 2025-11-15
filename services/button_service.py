@@ -55,6 +55,9 @@ class ButtonService:
         # State tracking
         self.press_count = 0
         self.button_callback: Optional[Callable] = None
+        
+        # Event loop reference (for async callbacks from gpiozero thread)
+        self.event_loop: Optional[asyncio.AbstractEventLoop] = None
     
     def initialize(self, button_pin: int = 18, pull_up: bool = True, bounce_time: float = 0.05) -> bool:
         """
@@ -108,6 +111,21 @@ class ButtonService:
         if self.is_running:
             print("⚠️  Button detection is already running")
             return
+        
+        # Store reference to current event loop (for async callbacks from gpiozero thread)
+        try:
+            self.event_loop = asyncio.get_running_loop()
+            print(f"✅ Event loop reference stored for async callbacks")
+            print(f"   Event loop: {self.event_loop}")
+            print(f"   Loop running: {self.event_loop.is_running()}")
+        except RuntimeError as e:
+            print(f"⚠️  Could not get event loop - async callbacks may not work: {e}")
+            # Try alternative method
+            try:
+                self.event_loop = asyncio.get_event_loop()
+                print(f"✅ Got event loop via get_event_loop()")
+            except:
+                self.event_loop = None
         
         # Create gpiozero Button object
         try:
@@ -168,21 +186,25 @@ class ButtonService:
                 try:
                     # Check if callback is async
                     if asyncio.iscoroutinefunction(self.button_callback):
-                        # Try to get the running event loop
-                        try:
-                            loop = asyncio.get_running_loop()
-                            # Schedule async callback in the running loop
-                            asyncio.run_coroutine_threadsafe(self.button_callback(), loop)
-                        except RuntimeError:
-                            # No running loop in this thread, try to get main loop
+                        # Use stored event loop reference
+                        if self.event_loop:
                             try:
-                                loop = asyncio.get_event_loop()
-                                if loop.is_running():
-                                    asyncio.run_coroutine_threadsafe(self.button_callback(), loop)
+                                if self.event_loop.is_running():
+                                    # Schedule async callback in the main event loop
+                                    print(f"📞 Scheduling async callback in event loop...")
+                                    future = asyncio.run_coroutine_threadsafe(self.button_callback(), self.event_loop)
+                                    print(f"✅ Async callback scheduled successfully")
                                 else:
-                                    loop.run_until_complete(self.button_callback())
-                            except:
-                                print("⚠️  Cannot call async callback (no event loop available)")
+                                    print("⚠️  Event loop exists but is not running")
+                                    print(f"   Attempting to run callback directly...")
+                                    self.event_loop.run_until_complete(self.button_callback())
+                            except Exception as e:
+                                print(f"⚠️  Error scheduling async callback: {e}")
+                                import traceback
+                                traceback.print_exc()
+                        else:
+                            print("⚠️  Cannot call async callback (event loop not stored)")
+                            print(f"   Event loop reference: {self.event_loop}")
                     else:
                         # Sync callback, call directly
                         self.button_callback()
