@@ -38,7 +38,7 @@ YOLO_MIN_DETECTION_AREA: Final[int] = 100000  # Minimum bounding box area (px²)
 
 # Text-to-Speech Configuration
 TTS_ENABLED: Final[bool] = True  # Set to True to enable voice output
-TTS_RATE: Final[int] = 130  # Speech rate in words per minute (100-130 recommended for seniors, slower than normal 150-200)
+TTS_RATE: Final[int] = 190  # Speech rate in words per minute (100-130 recommended for seniors, slower than normal 150-200)
 TTS_VOLUME: Final[float] = 0.9  # Volume level (0.0-1.0)
 TTS_PREFER_FEMALE_VOICE: Final[bool] = True  # Use female voice if available
 
@@ -67,7 +67,7 @@ BUTTON_BOUNCE_TIME: Final[float] = 0.01  # Button bounce time in seconds (50ms)
 # LLM Configuration (OpenAI GPT for voice command processing)
 LLM_ENABLED: Final[bool] = True  # Enable LLM for processing voice commands
 LLM_API_KEY: Final[str] = os.getenv("OPENAI_API_KEY", "")  # OpenAI API key from .env
-LLM_MODEL: Final[str] = "gpt-4.0"  # Model: gpt-3.5-turbo (fast, cheap) or gpt-4 (best quality)
+LLM_MODEL: Final[str] = "gpt-4o"  # Model: gpt-3.5-turbo (fast, cheap) or gpt-4 (best quality)
 LLM_SYSTEM_PROMPT: Final[str] = (
     "You are Ruby, a helpful voice assistant for senior citizens. "
     "Be friendly, clear, and concise, super concise, and avoid using hard jargons and vocabularies, use easy words. "
