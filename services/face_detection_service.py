@@ -81,6 +81,9 @@ class FaceDetectionService:
             # Try picamera2 first (for Raspberry Pi), then fall back to OpenCV
             if PICAMERA2_AVAILABLE:
                 try:
+                    # First, try to close any existing camera instances
+                    self._cleanup_camera()
+                    
                     print(f"📷 Attempting to open Pi Camera using picamera2...")
                     self.picam = Picamera2()
                     
@@ -88,8 +91,10 @@ class FaceDetectionService:
                     print(f"   Available cameras: {self.picam.global_camera_info()}")
                     
                     # Configure camera for 640x480 (matches our resize target)
+                    # Use a simpler configuration to avoid buffer issues
                     config = self.picam.create_preview_configuration(
-                        main={"size": (640, 480), "format": "RGB888"}
+                        main={"size": (640, 480), "format": "RGB888"},
+                        buffer_count=2  # Reduce buffer count to avoid conflicts
                     )
                     self.picam.configure(config)
                     
@@ -98,18 +103,33 @@ class FaceDetectionService:
                     
                     # Give camera time to initialize
                     print(f"   Waiting for camera to warm up...")
-                    time.sleep(2)
+                    time.sleep(3)  # Increased from 2 to 3 seconds
                     
-                    # Test capture
-                    test_frame = self.picam.capture_array()
-                    print(f"   Test capture successful: {test_frame.shape}")
+                    # Test capture with retry
+                    test_frame = None
+                    for retry in range(3):
+                        try:
+                            test_frame = self.picam.capture_array()
+                            break
+                        except Exception as capture_error:
+                            if retry < 2:
+                                print(f"   Test capture failed, retrying ({retry + 1}/3)...")
+                                time.sleep(1)
+                            else:
+                                raise capture_error
                     
-                    self.use_picamera = True
-                    print(f"✅ Pi Camera opened successfully (picamera2)")
+                    if test_frame is not None:
+                        print(f"   Test capture successful: {test_frame.shape}")
+                        self.use_picamera = True
+                        print(f"✅ Pi Camera opened successfully (picamera2)")
+                    else:
+                        raise Exception("Test capture failed after retries")
                     
                 except Exception as e:
                     print(f"⚠️  Failed to open picamera2: {e}")
                     print(f"   Error type: {type(e).__name__}")
+                    # Clean up on failure
+                    self._cleanup_camera()
                     import traceback
                     traceback.print_exc()
                     print(f"   Falling back to OpenCV...")
@@ -157,16 +177,31 @@ class FaceDetectionService:
                 pass
         
         # Release camera resources
-        if self.use_picamera and self.picam:
-            try:
-                self.picam.stop()
-            except:
-                pass
-        
-        if self.cap:
-            self.cap.release()
+        self._cleanup_camera()
         
         print("⏹️  Face detection stopped")
+    
+    def _cleanup_camera(self):
+        """Clean up camera resources properly"""
+        if self.use_picamera and self.picam:
+            try:
+                print("🧹 Stopping picamera2...")
+                self.picam.stop()
+                time.sleep(0.5)  # Give camera time to release
+            except Exception as e:
+                print(f"⚠️  Error stopping picamera2: {e}")
+            finally:
+                self.picam = None
+                self.use_picamera = False
+        
+        if self.cap:
+            try:
+                print("🧹 Releasing OpenCV camera...")
+                self.cap.release()
+            except Exception as e:
+                print(f"⚠️  Error releasing OpenCV camera: {e}")
+            finally:
+                self.cap = None
     
     async def _detection_loop(self):
         """Main detection loop - runs continuously"""
